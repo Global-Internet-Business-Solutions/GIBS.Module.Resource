@@ -1,0 +1,79 @@
+@using GIBS.Module.Resource.Services
+@using ResourceModel = GIBS.Module.Resource.Models.Resource
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IResourceService ClientResourceService
+@inject NavigationManager NavigationManager
+@inject IStringLocalizer<Index> Localizer
+
+@if (_Resources == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <ActionLink Action="Add" Security="SecurityAccessLevel.Edit" Text="Add Resource" ResourceKey="Add" />
+    <br />
+    <br />
+    @if (@_Resources.Count != 0)
+    {
+        <Pager Items="@_Resources">
+            <Header>
+                <th style="width: 1px;">&nbsp;</th>
+                <th style="width: 1px;">&nbsp;</th>
+                <th>@Localizer["Name"]</th>
+            </Header>
+            <Row>
+                <td><ActionLink Action="Edit" Parameters="@($"id=" + context.ResourceId.ToString())" ResourceKey="Edit"  /></td>
+                <td><ActionDialog Header="Delete Resource" Message="Are You Sure You Wish To Delete This Resource?" Action="Delete" Security="SecurityAccessLevel.Edit" Class="btn btn-danger" OnClick="@(async () => await Delete(context))" ResourceKey="Delete"  Id="@context.ResourceId.ToString()" /></td>
+                <td>@context.Name</td>
+            </Row>
+        </Pager>
+    }
+    else
+    {
+        <p>@Localizer["Message.DisplayNone"]</p>
+    }
+}
+
+@code {
+    public override string RenderMode => RenderModes.Static;
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+        new Script("_content/GIBS.Module.Resource/Module.js")
+    };
+
+    List<ResourceModel> _Resources;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Resource {Error}", ex.Message);
+            AddModuleMessage(Localizer["Message.LoadError"], MessageType.Error);
+        }
+    }
+
+    private async Task Delete(ResourceModel resource)
+    {
+        try
+        {
+            await ClientResourceService.DeleteResourceAsync(resource.ResourceId, ModuleState.ModuleId);
+            await logger.LogInformation("Resource Deleted {Resource}", resource);
+            _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Deleting Resource {Resource} {Error}", resource, ex.Message);
+            AddModuleMessage(Localizer["Message.DeleteError"], MessageType.Error);
+        }
+    }
+}

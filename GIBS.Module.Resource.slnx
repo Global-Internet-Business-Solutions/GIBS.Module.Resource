@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/_Oqtane/" />
+  <Project Path="Client\GIBS.Module.Resource.Client.csproj" />
+  <Project Path="Server\GIBS.Module.Resource.Server.csproj" />
+  <Project Path="Shared\GIBS.Module.Resource.Shared.csproj" />
+  <Project Path="Package\GIBS.Module.Resource.Package.csproj" />
+</Solution>

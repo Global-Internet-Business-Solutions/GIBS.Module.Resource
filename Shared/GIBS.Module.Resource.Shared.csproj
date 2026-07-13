@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>    
+    <Version>1.0.0</Version>
+    <Product>GIBS.Module.Resource</Product>
+    <Authors>GIBS</Authors>
+    <Company>GIBS</Company>
+    <Description>Resource Manager</Description>
+    <Copyright>GIBS</Copyright>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>GIBS.Module.Resource.Shared.Oqtane</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Oqtane.Shared"><HintPath>..\..\oqtane.framework\Oqtane.Server\bin\Debug\net10.0\Oqtane.Shared.dll</HintPath></Reference>
+  </ItemGroup>
+
+</Project>
