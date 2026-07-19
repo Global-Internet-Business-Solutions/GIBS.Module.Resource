@@ -1,0 +1,104 @@
+@using GIBS.Module.Resource.Services
+@using ResourceModel = GIBS.Module.Resource.Models.Resource
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IResourceService ClientResourceService
+@inject NavigationManager NavigationManager
+
+<div class="mb-3 d-flex justify-content-between">
+    <h4 class="mb-3">Resources</h4>
+    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl()">Back to Calendar</NavLink>
+</div>
+
+@if (_resources == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_resources.Count == 0)
+{
+    <p class="text-muted">No active resources available.</p>
+}
+else
+{
+    @foreach (var typeGroup in _resources.GroupBy(r => string.IsNullOrWhiteSpace(r.ResourceType) ? "Uncategorized" : r.ResourceType).OrderBy(g => g.Key))
+    {
+        <h5 class="mt-4 mb-3">@typeGroup.Key</h5>
+        <div class="row">
+            @foreach (var resource in typeGroup.OrderBy(r => r.Name))
+            {
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">@resource.Name</h6>
+                            <span class="badge @(resource.IsActive ? "bg-success" : "bg-secondary")">
+                                @(resource.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="fw-bold small">Description:</label>
+                                <p class="mb-0 small">@(string.IsNullOrWhiteSpace(resource.Description) ? "No description provided" : resource.Description)</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="fw-bold small">Type:</label>
+                                <p class="mb-0 small">@(string.IsNullOrWhiteSpace(resource.ResourceType) ? "Not specified" : resource.ResourceType)</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="fw-bold small">Maximum Capacity:</label>
+                                <p class="mb-0 small">@resource.MaxCapacity</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="fw-bold small">Buffer Times:</label>
+                                <p class="mb-0 small">Before: @resource.BufferBeforeMinutes min | After: @resource.BufferAfterMinutes min</p>
+                            </div>
+                        </div>
+                        <div class="card-footer d-flex justify-content-between">
+                            <a href="@NavigateUrl(ModuleState.ModuleId, "ResourceDetails", $"id={resource.ResourceId}")" class="btn btn-sm btn-outline-primary">
+                                View Details
+                            </a>
+                            <a href="@NavigateUrl(ModuleState.ModuleId, "Reserve", $"id={resource.ResourceId}")" class="btn btn-sm btn-primary">
+                                Reserve
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.View;
+    public override bool UseAdminContainer => false;
+
+    public override string Actions => "ResourceList";
+
+    public override string Title => "Resources";
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+        new Script("_content/GIBS.Module.Resource/Module.js")
+    };
+
+    private List<ResourceModel> _resources;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var allResources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+            // Filter to show only active resources
+            _resources = allResources?.Where(r => r.IsActive).ToList() ?? new List<ResourceModel>();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Resources {Error}", ex.Message);
+            AddModuleMessage("Error loading resources.", MessageType.Error);
+        }
+    }
+}

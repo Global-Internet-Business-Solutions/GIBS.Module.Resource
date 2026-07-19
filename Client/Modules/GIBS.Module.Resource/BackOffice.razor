@@ -1,0 +1,148 @@
+@using GIBS.Module.Resource.Services
+@using ResourceModel = GIBS.Module.Resource.Models.Resource
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IResourceService ClientResourceService
+@inject NavigationManager NavigationManager
+
+<div class="mb-3 d-flex justify-content-between">
+    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl()">Back to Calendar</NavLink>
+
+    <div>
+        <ActionLink Action="PrintSchedule" Security="SecurityAccessLevel.Edit" Text="Print Schedule" IconName="oi oi-print" Class="me-2" />
+        <ActionLink Action="ManageAllReservations" Security="SecurityAccessLevel.View" Text="Manage All Reservations" />
+    </div>
+</div>
+
+@if (_Resources == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Resources</h6>
+                    <h3 class="mb-0">@TotalResources</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Active</h6>
+                    <h3 class="mb-0 text-success">@ActiveResources</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Inactive</h6>
+                    <h3 class="mb-0 text-secondary">@InactiveResources</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Active Capacity</h6>
+                    <h3 class="mb-0">@ActiveCapacity</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <ActionLink Action="Add" Security="SecurityAccessLevel.Edit" Text="Add Resource" ResourceKey="Add" />
+    </div>
+
+    @if (_Resources.Count != 0)
+    {
+        <Pager Items="@_Resources">
+            <Header>
+                <th style="width: 1px;">&nbsp;</th>
+                <th style="width: 1px;">&nbsp;</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Capacity</th>
+                <th>Buffers</th>
+                <th>Quick Actions</th>
+            </Header>
+            <Row>
+                <td><ActionLink Action="Edit" Parameters="@($"id={context.ResourceId}")" ResourceKey="Edit" /></td>
+                <td><ActionDialog Header="Delete Resource" Message="Are You Sure You Wish To Delete This Resource?" Action="Delete" Security="SecurityAccessLevel.Edit" Class="btn btn-danger" OnClick="@(async () => await Delete(context))" ResourceKey="Delete" Id="@context.ResourceId.ToString()" /></td>
+                <td>@context.Name</td>
+                <td>@(string.IsNullOrWhiteSpace(context.ResourceType) ? "-" : context.ResourceType)</td>
+                <td>
+                    <span class="badge @(context.IsActive ? "bg-success" : "bg-secondary")">
+                        @(context.IsActive ? "Active" : "Inactive")
+                    </span>
+                </td>
+                <td>@context.MaxCapacity</td>
+                <td>@context.BufferBeforeMinutes / @context.BufferAfterMinutes min</td>
+                <td>
+                    <ActionLink Action="Edit" Parameters="@($"id={context.ResourceId}&view=reservations")" Security="SecurityAccessLevel.Edit" Text="Manage Reservations" />
+                </td>
+            </Row>
+        </Pager>
+    }
+    else
+    {
+        <p>No resources available.</p>
+    }
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+    public override bool UseAdminContainer => false;
+    public override string Actions => "BackOffice";
+
+    public override string Title => "Resource Back Office";
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+        new Script("_content/GIBS.Module.Resource/Module.js")
+    };
+
+    List<ResourceModel> _Resources;
+
+    private int TotalResources => _Resources?.Count ?? 0;
+    private int ActiveResources => _Resources?.Count(item => item.IsActive) ?? 0;
+    private int InactiveResources => TotalResources - ActiveResources;
+    private int ActiveCapacity => _Resources?.Where(item => item.IsActive).Sum(item => item.MaxCapacity) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Resource {Error}", ex.Message);
+            AddModuleMessage("Error loading resource data.", MessageType.Error);
+        }
+    }
+
+    private async Task Delete(ResourceModel resource)
+    {
+        try
+        {
+            await ClientResourceService.DeleteResourceAsync(resource.ResourceId, ModuleState.ModuleId);
+            await logger.LogInformation("Resource Deleted {Resource}", resource);
+            _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Deleting Resource {Resource} {Error}", resource, ex.Message);
+            AddModuleMessage("Error deleting resource.", MessageType.Error);
+        }
+    }
+}

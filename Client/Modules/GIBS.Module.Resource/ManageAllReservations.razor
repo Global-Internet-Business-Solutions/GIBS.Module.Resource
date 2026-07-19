@@ -1,0 +1,242 @@
+@using GIBS.Module.Resource.Services
+@using ReservationModel = GIBS.Module.Resource.Models.Reservation
+@using GIBS.Module.Resource.Models
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IReservationService ClientReservationService
+@inject IResourceService ClientResourceService
+
+<div class="mb-3 d-flex justify-content-between">
+    <ActionLink Action="BackOffice" Security="SecurityAccessLevel.View" Text="Return to BackOffice" />
+    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl()">Back to Calendar</NavLink>
+</div>
+
+@if (_Reservations == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    @if (_Reservations.Count != 0)
+    {
+        <Pager Items="@_Reservations" PageSize="10" SearchProperties="ResourceName,UserName,Status,StartTime,EndTime" Class="table table-striped">
+            <Header>
+                <th>Resource</th>
+                <th>User</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </Header>
+            <Row>
+                <td>@GetResourceName(context.ResourceId)</td>
+                <td>@(context.UserId > 0 ? context.UserName : context.UserId.ToString())</td>
+                <td>@context.StartTime.ToString("g")</td>
+                <td>@context.EndTime.ToString("g")</td>
+                <td>
+                    <span class="badge @GetStatusBadgeClass(context.Status)">
+                        @context.Status
+                    </span>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-warning me-1" @onclick="(() => EditReservation(context))">Edit</button>
+                    @if (context.Status == ReservationStatus.Pending)
+                    {
+                        <button type="button" class="btn btn-sm btn-success me-1" @onclick="(() => ConfirmReservation(context))">Confirm</button>
+                    }
+                    <button type="button" class="btn btn-sm btn-danger" @onclick="(() => DeleteReservation(context.ReservationId))">Delete</button>
+                </td>
+            </Row>
+        </Pager>
+    }
+    else
+    {
+        <p>No reservations found.</p>
+    }
+}
+
+@if (_ShowEditDialog)
+{
+    <div class="modal show d-block" role="dialog" style="background-color: rgba(0,0,0,.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Reservation</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditDialog"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_EditingReservation != null)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Start Time</label>
+                            <input type="datetime-local" class="form-control" @bind="_EditingReservation.StartTime" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">End Time</label>
+                            <input type="datetime-local" class="form-control" @bind="_EditingReservation.EndTime" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" @bind="_EditingReservation.Notes"></textarea>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditDialog">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveReservation">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+    public override bool UseAdminContainer => false;
+
+    public override string Actions => "ManageAllReservations";
+
+    public override string Title => "Manage Reservations";
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+        new Script("_content/GIBS.Module.Resource/Module.js")
+    };
+
+    List<ReservationModel> _Reservations;
+    List<Models.Resource> _Resources;
+    ReservationModel _EditingReservation;
+    bool _ShowEditDialog = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadReservationsAsync();
+            _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Reservations {Error}", ex.Message);
+            AddModuleMessage("Error loading reservations data.", MessageType.Error);
+        }
+    }
+
+    private async Task LoadReservationsAsync()
+    {
+        try
+        {
+            var reservations = new List<ReservationModel>();
+            var resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+
+            foreach (var resource in resources)
+            {
+                var resourceReservations = await ClientReservationService.GetReservationsAsync(resource.ResourceId, ModuleState.ModuleId);
+                if (resourceReservations != null)
+                {
+                    reservations.AddRange(resourceReservations);
+                }
+            }
+
+            // Sort by StartTime descending
+            _Reservations = reservations.OrderByDescending(r => r.StartTime).ToList();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading All Reservations {Error}", ex.Message);
+            AddModuleMessage("Error loading reservations.", MessageType.Error);
+        }
+    }
+
+    private string GetResourceName(int resourceId)
+    {
+        return _Resources?.FirstOrDefault(r => r.ResourceId == resourceId)?.Name ?? "Unknown";
+    }
+
+    private string GetStatusBadgeClass(ReservationStatus status)
+    {
+        return status switch
+        {
+            ReservationStatus.Pending => "bg-warning",
+            ReservationStatus.Confirmed => "bg-success",
+            ReservationStatus.Cancelled => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private void EditReservation(ReservationModel reservation)
+    {
+        _EditingReservation = new ReservationModel
+        {
+            ReservationId = reservation.ReservationId,
+            ResourceId = reservation.ResourceId,
+            UserId = reservation.UserId,
+            StartTime = reservation.StartTime,
+            EndTime = reservation.EndTime,
+            Status = reservation.Status,
+            Notes = reservation.Notes
+        };
+        _ShowEditDialog = true;
+    }
+
+    private void CloseEditDialog()
+    {
+        _ShowEditDialog = false;
+        _EditingReservation = null;
+    }
+
+    private async Task SaveReservation()
+    {
+        try
+        {
+            if (_EditingReservation != null)
+            {
+                await ClientReservationService.UpdateReservationAsync(_EditingReservation, ModuleState.ModuleId);
+                await logger.LogInformation("Reservation Updated {Reservation}", _EditingReservation);
+                CloseEditDialog();
+                await LoadReservationsAsync();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Updating Reservation {Error}", ex.Message);
+            AddModuleMessage("Error saving reservation.", MessageType.Error);
+        }
+    }
+
+    private async Task ConfirmReservation(ReservationModel reservation)
+    {
+        try
+        {
+            reservation.Status = ReservationStatus.Confirmed;
+            await ClientReservationService.UpdateReservationAsync(reservation, ModuleState.ModuleId);
+            await logger.LogInformation("Reservation Confirmed {Reservation}", reservation);
+            await LoadReservationsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Confirming Reservation {Error}", ex.Message);
+            AddModuleMessage("Error confirming reservation.", MessageType.Error);
+        }
+    }
+
+    private async Task DeleteReservation(int reservationId)
+    {
+        try
+        {
+            await ClientReservationService.DeleteReservationAsync(reservationId, ModuleState.ModuleId);
+            await logger.LogInformation("Reservation Deleted {ReservationId}", reservationId);
+            await LoadReservationsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Deleting Reservation {Error}", ex.Message);
+            AddModuleMessage("Error deleting reservation.", MessageType.Error);
+        }
+    }
+}

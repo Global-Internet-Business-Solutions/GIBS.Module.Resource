@@ -1,0 +1,494 @@
+@using GIBS.Module.Resource.Services
+@using ResourceModel = GIBS.Module.Resource.Models.Resource
+@using ReservationModel = GIBS.Module.Resource.Models.Reservation
+@using GIBS.Module.Resource.Models
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IResourceService ClientResourceService
+@inject IReservationService ClientReservationService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+
+<div class="mb-3 d-flex justify-content-between no-print">
+    <h5 class="mb-0">Print Schedule</h5>
+    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl(ModuleState.ModuleId, "BackOffice")">Back to Office</NavLink>
+</div>
+
+<div class="no-print">
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Print Settings</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">View Type</label>
+                        <select class="form-select" @bind="_viewType" @bind:after="OnViewTypeChanged">
+                            <option value="daily">Daily View</option>
+                            <option value="weekly">Weekly View</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (_viewType == "daily")
+                {
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Date</label>
+                            <input type="date" class="form-control" @bind="_selectedDate" @bind:after="LoadScheduleAsync" />
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Resource(s)</label>
+                            <select class="form-select" @bind="_selectedResourceId" @bind:after="LoadScheduleAsync">
+                                <option value="0">All Resources</option>
+                                @if (_resources != null)
+                                {
+                                    @foreach (var resource in _resources.Where(r => r.IsActive).OrderBy(r => r.Name))
+                                    {
+                                        <option value="@resource.ResourceId">@resource.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Week Starting</label>
+                            <input type="date" class="form-control" @bind="_weekStartDate" @bind:after="LoadScheduleAsync" />
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Resource</label>
+                            <select class="form-select" @bind="_selectedResourceId" @bind:after="LoadScheduleAsync">
+                                <option value="0">Select a resource...</option>
+                                @if (_resources != null)
+                                {
+                                    @foreach (var resource in _resources.Where(r => r.IsActive).OrderBy(r => r.Name))
+                                    {
+                                        <option value="@resource.ResourceId">@resource.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" @onclick="OnPrintSchedule">
+                    <i class="oi oi-print"></i> Print Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="text-center my-5">
+        <p><em>Loading schedule...</em></p>
+    </div>
+}
+else if (_reservations != null)
+{
+    <div class="print-content">
+        <div class="print-header text-center mb-4">
+            <h3>@(_viewType == "daily" ? "Daily" : "Weekly") Schedule</h3>
+            @if (_viewType == "daily")
+            {
+                <h5>@_selectedDate.ToString("dddd, MMMM dd, yyyy")</h5>
+                <p class="text-muted">@(_selectedResourceId == 0 ? "All Resources" : GetResourceName(_selectedResourceId))</p>
+            }
+            else
+            {
+                <h5>Week of @_weekStartDate.ToString("MMMM dd, yyyy") - @_weekStartDate.AddDays(6).ToString("MMMM dd, yyyy")</h5>
+                @if (_selectedResourceId > 0)
+                {
+                    <p class="text-muted">@GetResourceName(_selectedResourceId)</p>
+                }
+            }
+        </div>
+
+        @if (_viewType == "daily")
+        {
+            @RenderDailyView()
+        }
+        else
+        {
+            @RenderWeeklyView()
+        }
+    </div>
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+    public override bool UseAdminContainer => false;
+
+    public override string Actions => "PrintSchedule";
+
+    public override string Title => "Print Schedule";
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+        new Script("_content/GIBS.Module.Resource/Module.js")
+    };
+
+    private List<ResourceModel> _resources;
+    private List<ReservationModel> _reservations;
+    private string _viewType = "daily";
+    private DateTime _selectedDate = DateTime.Today;
+    private DateTime _weekStartDate = GetMonday(DateTime.Today);
+    private int _selectedResourceId = 0;
+    private bool _isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+            await LoadScheduleAsync();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Print Schedule {Error}", ex.Message);
+            AddModuleMessage("Error loading schedule.", MessageType.Error);
+        }
+    }
+
+    private async Task OnViewTypeChanged()
+    {
+        if (_viewType == "weekly" && _selectedResourceId == 0 && _resources?.Any() == true)
+        {
+            _selectedResourceId = _resources.First(r => r.IsActive).ResourceId;
+        }
+        await LoadScheduleAsync();
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            _reservations = new List<ReservationModel>();
+
+            if (_viewType == "daily")
+            {
+                if (_selectedResourceId == 0)
+                {
+                    // Load all resources for the selected date
+                    foreach (var resource in _resources.Where(r => r.IsActive))
+                    {
+                        var resourceReservations = await ClientReservationService.GetReservationsAsync(resource.ResourceId, ModuleState.ModuleId);
+                        if (resourceReservations != null)
+                        {
+                            var dayReservations = resourceReservations
+                                .Where(r => r.StartTime.Date == _selectedDate.Date && r.Status != ReservationStatus.Cancelled)
+                                .ToList();
+                            _reservations.AddRange(dayReservations);
+                        }
+                    }
+                }
+                else
+                {
+                    // Load single resource for the selected date
+                    var resourceReservations = await ClientReservationService.GetReservationsAsync(_selectedResourceId, ModuleState.ModuleId);
+                    if (resourceReservations != null)
+                    {
+                        _reservations = resourceReservations
+                            .Where(r => r.StartTime.Date == _selectedDate.Date && r.Status != ReservationStatus.Cancelled)
+                            .ToList();
+                    }
+                }
+
+                _reservations = _reservations.OrderBy(r => r.StartTime).ToList();
+            }
+            else // weekly
+            {
+                if (_selectedResourceId > 0)
+                {
+                    var weekEnd = _weekStartDate.AddDays(7);
+                    var resourceReservations = await ClientReservationService.GetReservationsAsync(_selectedResourceId, ModuleState.ModuleId);
+                    if (resourceReservations != null)
+                    {
+                        _reservations = resourceReservations
+                            .Where(r => r.StartTime.Date >= _weekStartDate.Date &&
+                                       r.StartTime.Date < weekEnd.Date &&
+                                       r.Status != ReservationStatus.Cancelled)
+                            .OrderBy(r => r.StartTime)
+                            .ToList();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Schedule Data {Error}", ex.Message);
+            AddModuleMessage("Error loading schedule data.", MessageType.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private RenderFragment RenderDailyView() => __builder =>
+    {
+        if (_selectedResourceId == 0)
+        {
+            // Group by resource
+            var groupedReservations = _reservations.GroupBy(r => r.ResourceId).OrderBy(g => GetResourceName(g.Key));
+
+            <div class="daily-view">
+                @foreach (var group in groupedReservations)
+                {
+                    <div class="resource-section mb-4">
+                        <h5 class="border-bottom pb-2">@GetResourceName(group.Key)</h5>
+                        @if (!group.Any())
+                        {
+                            <p class="text-muted">No bookings</p>
+                        }
+                        else
+                        {
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 25%;">Time</th>
+                                        <th style="width: 25%;">User</th>
+                                        <th style="width: 10%;">Status</th>
+                                        <th style="width: 40%;">Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var reservation in group.OrderBy(r => r.StartTime))
+                                    {
+                                        <tr>
+                                            <td>@reservation.StartTime.ToString("h:mm tt") - @reservation.EndTime.ToString("h:mm tt")</td>
+                                            <td>@(reservation.UserName ?? "Unknown")</td>
+                                            <td>
+                                                <span class="badge @GetStatusBadgeClass(reservation.Status)">
+                                                    @reservation.Status
+                                                </span>
+                                            </td>
+                                            <td class="notes-cell">@(string.IsNullOrWhiteSpace(reservation.Notes) ? "-" : reservation.Notes)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+
+                @if (!groupedReservations.Any())
+                {
+                    <div class="alert alert-info">
+                        <p class="mb-0">No bookings found for @_selectedDate.ToString("MMMM dd, yyyy")</p>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            // Single resource view
+            <div class="daily-view">
+                @if (!_reservations.Any())
+                {
+                    <div class="alert alert-info">
+                        <p class="mb-0">No bookings found for this date</p>
+                    </div>
+                }
+                else
+                {
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Time</th>
+                                <th style="width: 25%;">User</th>
+                                <th style="width: 10%;">Status</th>
+                                <th style="width: 40%;">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reservation in _reservations)
+                            {
+                                <tr>
+                                    <td>@reservation.StartTime.ToString("h:mm tt") - @reservation.EndTime.ToString("h:mm tt")</td>
+                                    <td>@(reservation.UserName ?? "Unknown")</td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(reservation.Status)">
+                                            @reservation.Status
+                                        </span>
+                                    </td>
+                                    <td class="notes-cell">@(string.IsNullOrWhiteSpace(reservation.Notes) ? "-" : reservation.Notes)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+    };
+
+    private RenderFragment RenderWeeklyView() => __builder =>
+    {
+        if (_selectedResourceId == 0)
+        {
+            <div class="alert alert-warning">
+                <p class="mb-0">Please select a resource for weekly view</p>
+            </div>
+            return;
+        }
+
+        <div class="weekly-view">
+            @foreach (var dayIndex in Enumerable.Range(0, 7))
+            {
+                var currentDate = _weekStartDate.AddDays(dayIndex);
+                var dayReservations = _reservations.Where(r => r.StartTime.Date == currentDate.Date).OrderBy(r => r.StartTime).ToList();
+
+                <div class="day-section mb-4">
+                    <h5 class="border-bottom pb-2">@currentDate.ToString("dddd, MMMM dd")</h5>
+                    @if (!dayReservations.Any())
+                    {
+                        <p class="text-muted">No bookings</p>
+                    }
+                    else
+                    {
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%;">Time</th>
+                                    <th style="width: 25%;">User</th>
+                                    <th style="width: 10%;">Status</th>
+                                    <th style="width: 40%;">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var reservation in dayReservations)
+                                {
+                                    <tr>
+                                        <td>@reservation.StartTime.ToString("h:mm tt") - @reservation.EndTime.ToString("h:mm tt")</td>
+                                        <td>@(reservation.UserName ?? "Unknown")</td>
+                                        <td>
+                                            <span class="badge @GetStatusBadgeClass(reservation.Status)">
+                                                @reservation.Status
+                                            </span>
+                                        </td>
+                                        <td class="notes-cell">@(string.IsNullOrWhiteSpace(reservation.Notes) ? "-" : reservation.Notes)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private string GetResourceName(int resourceId)
+    {
+        return _resources?.FirstOrDefault(r => r.ResourceId == resourceId)?.Name ?? "Unknown";
+    }
+
+    private string GetStatusBadgeClass(ReservationStatus status)
+    {
+        return status switch
+        {
+            ReservationStatus.Pending => "bg-warning",
+            ReservationStatus.Confirmed => "bg-success",
+            ReservationStatus.Cancelled => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private static DateTime GetMonday(DateTime date)
+    {
+        int daysFromMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.AddDays(-daysFromMonday);
+    }
+
+    private async Task OnPrintSchedule()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+}
+
+<style>
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .print-content {
+            width: 100%;
+            visibility: visible !important;
+        }
+
+        .print-content * {
+            visibility: visible !important;
+        }
+
+        .print-header {
+            margin-bottom: 20px;
+        }
+
+        .table {
+            page-break-inside: auto;
+        }
+
+        .table tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+
+        .table thead {
+            display: table-header-group;
+        }
+
+        .resource-section,
+        .day-section {
+            page-break-inside: avoid;
+            margin-bottom: 20px;
+        }
+
+        .notes-cell {
+            word-wrap: break-word;
+            max-width: 300px;
+        }
+
+        .badge {
+            border: 1px solid #000;
+            padding: 2px 6px;
+        }
+    }
+
+    @@media screen {
+        .print-content {
+            background: white;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .notes-cell {
+            word-wrap: break-word;
+            max-width: 400px;
+        }
+    }
+</style>

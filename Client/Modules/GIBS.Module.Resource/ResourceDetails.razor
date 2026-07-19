@@ -1,0 +1,138 @@
+@using GIBS.Module.Resource.Services
+@using ResourceModel = GIBS.Module.Resource.Models.Resource
+@using AvailabilityModel = GIBS.Module.Resource.Models.ResourceAvailability
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IResourceService ClientResourceService
+@inject IResourceAvailabilityService ClientResourceAvailabilityService
+@inject NavigationManager NavigationManager
+
+<div class="mb-3">
+    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl()">Back to Schedule</NavLink>
+</div>
+
+@if (_resource == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h4>@_resource.Name</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Resource Information</h5>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Description:</label>
+                        <p>@(string.IsNullOrWhiteSpace(_resource.Description) ? "No description provided" : _resource.Description)</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Type:</label>
+                        <p>@(string.IsNullOrWhiteSpace(_resource.ResourceType) ? "Not specified" : _resource.ResourceType)</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Maximum Capacity:</label>
+                        <p>@_resource.MaxCapacity</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Status:</label>
+                        <p>
+                            <span class="badge @(_resource.IsActive ? "bg-success" : "bg-secondary")">
+                                @(_resource.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Buffer Times:</label>
+                        <p>Before: @_resource.BufferBeforeMinutes minutes | After: @_resource.BufferAfterMinutes minutes</p>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <h5>Weekly Availability Schedule</h5>
+
+                    @if (_availabilities == null || _availabilities.Count == 0)
+                    {
+                        <p class="text-muted">No availability schedule configured.</p>
+                    }
+                    else
+                    {
+                        <div class="row g-2">
+                            @foreach (var dayGroup in _availabilities.GroupBy(a => a.DayOfWeek).OrderBy(g => g.Key))
+                            {
+                                <div class="col-6">
+                                    <div class="card">
+                                        <div class="card-header py-2">
+                                            <strong>@dayGroup.Key</strong>
+                                        </div>
+                                        <div class="card-body py-2">
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach (var availability in dayGroup.OrderBy(a => a.StartTime))
+                                                {
+                                                    <li class="mb-1">
+                                                        <span class="badge bg-primary">
+                                                            @DateTime.Today.Add(availability.StartTime).ToString("h:mm tt") - 
+                                                            @DateTime.Today.Add(availability.EndTime).ToString("h:mm tt")
+                                                        </span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.View;
+    public override bool UseAdminContainer => false;
+    public override string Actions => "ResourceDetails";
+
+    public override string Title => "Resource Details";
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+        new Script("_content/GIBS.Module.Resource/Module.js")
+    };
+
+    private ResourceModel _resource;
+    private List<AvailabilityModel> _availabilities;
+    private int _resourceId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (PageState.QueryString.ContainsKey("id") && int.TryParse(PageState.QueryString["id"], out _resourceId))
+            {
+                _resource = await ClientResourceService.GetResourceAsync(_resourceId, ModuleState.ModuleId);
+                _availabilities = await ClientResourceAvailabilityService.GetAvailabilitiesAsync(_resourceId, ModuleState.ModuleId);
+            }
+            else
+            {
+                AddModuleMessage("Invalid resource ID.", MessageType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Resource Details {Error}", ex.Message);
+            AddModuleMessage("Error loading resource details.", MessageType.Error);
+        }
+    }
+}

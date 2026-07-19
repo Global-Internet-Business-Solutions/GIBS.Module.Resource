@@ -29,6 +29,8 @@ namespace GIBS.Module.Resource.Migrations.EntityBuilders
             ResourceType = AddMaxStringColumn(table,"ResourceType", true);
             IsActive = AddBooleanColumn(table,"IsActive");
             MaxCapacity = AddIntegerColumn(table,"MaxCapacity");
+            BufferBeforeMinutes = AddIntegerColumn(table,"BufferBeforeMinutes");
+            BufferAfterMinutes = AddIntegerColumn(table,"BufferAfterMinutes");
             AddAuditableColumns(table);
             return this;
         }
@@ -40,5 +42,7 @@ namespace GIBS.Module.Resource.Migrations.EntityBuilders
         public OperationBuilder<AddColumnOperation> ResourceType { get; set; }
         public OperationBuilder<AddColumnOperation> IsActive { get; set; }
         public OperationBuilder<AddColumnOperation> MaxCapacity { get; set; }
+        public OperationBuilder<AddColumnOperation> BufferBeforeMinutes { get; set; }
+        public OperationBuilder<AddColumnOperation> BufferAfterMinutes { get; set; }
     }
 }

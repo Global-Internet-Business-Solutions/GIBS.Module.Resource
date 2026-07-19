@@ -15,5 +15,7 @@ namespace GIBS.Module.Resource.Models
         public string ResourceType { get; set; }
         public bool IsActive { get; set; }
         public int MaxCapacity { get; set; }
+        public int BufferBeforeMinutes { get; set; }
+        public int BufferAfterMinutes { get; set; }
     }
 }

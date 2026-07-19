@@ -16,5 +16,9 @@ namespace GIBS.Module.Resource.Models
         public DateTime EndTime { get; set; }
         public ReservationStatus Status { get; set; }
         public string Notes { get; set; }
+
+        [NotMapped]
+        public string UserName { get; set; }
+
     }
 }

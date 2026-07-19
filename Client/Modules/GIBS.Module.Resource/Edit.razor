@@ -8,6 +8,11 @@
 @inject NavigationManager NavigationManager
 @inject IStringLocalizer<Edit> Localizer
 
+<div class="mb-3 d-flex justify-content-between">
+    <ActionLink Action="BackOffice" Security="SecurityAccessLevel.View" Text="Return to BackOffice" />
+    <ActionLink Action="ManageAllReservations" Security="SecurityAccessLevel.View" Text="Manage All Reservations" />
+</div>
+
 <form @ref="form" class="@(validated ? " was-validated" : "needs-validation" )" novalidate>
     <div class="container">
         <div class="row mb-1 align-items-center">
@@ -16,15 +21,58 @@
                 <input id="name" class="form-control" @bind="@_name" required />
             </div>
         </div>
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="description">Description: </Label>
+            <div class="col-sm-9">
+                <textarea id="description" class="form-control" @bind="@_description"></textarea>
+            </div>
+        </div>
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="resourceType">Type: </Label>
+            <div class="col-sm-9">
+                <input id="resourceType" class="form-control" @bind="@_resourceType" />
+            </div>
+        </div>
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="maxCapacity">Max Capacity: </Label>
+            <div class="col-sm-9">
+                <input id="maxCapacity" type="number" class="form-control" min="1" @bind="@_maxCapacity" />
+            </div>
+        </div>
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="bufferBefore">Buffer Before (Minutes): </Label>
+            <div class="col-sm-9">
+                <input id="bufferBefore" type="number" class="form-control" min="0" @bind="@_bufferBeforeMinutes" />
+            </div>
+        </div>
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="bufferAfter">Buffer After (Minutes): </Label>
+            <div class="col-sm-9">
+                <input id="bufferAfter" type="number" class="form-control" min="0" @bind="@_bufferAfterMinutes" />
+            </div>
+        </div>
+        <div class="row mb-3 align-items-center">
+            <Label Class="col-sm-3" For="isActive">Active: </Label>
+            <div class="col-sm-9">
+                <input id="isActive" type="checkbox" @bind="@_isActive" />
+            </div>
+        </div>
     </div>
     <button type="button" class="btn btn-success" @onclick="Save">@Localizer["Save"]</button>
     <NavLink class="btn btn-secondary" href="@NavigateUrl()">@Localizer["Cancel"]</NavLink>
-    <br /><br />
-    @if (PageState.Action == "Edit")
-    {
-    <AuditInfo CreatedBy="@_createdby" CreatedOn="@_createdon" ModifiedBy="@_modifiedby" ModifiedOn="@_modifiedon"></AuditInfo>
-    }
 </form>
+
+@if (PageState.Action == "Edit")
+{
+    <hr />
+    <ReservationManagement ResourceId="@_id" ModuleId="@ModuleState.ModuleId" />
+
+    <hr />
+    <ResourceAvailabilityManagement ResourceId="@_id" ModuleId="@ModuleState.ModuleId" />
+
+    <br /><br />
+    <AuditInfo CreatedBy="@_createdby" CreatedOn="@_createdon" ModifiedBy="@_modifiedby" ModifiedOn="@_modifiedon"></AuditInfo>
+}
 
 @code {
     public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
@@ -43,10 +91,17 @@
 
     private int _id;
     private string _name;
+    private string _description;
+    private string _resourceType;
+    private bool _isActive = true;
+    private int _maxCapacity = 1;
+    private int _bufferBeforeMinutes;
+    private int _bufferAfterMinutes;
     private string _createdby;
     private DateTime _createdon;
     private string _modifiedby;
     private DateTime _modifiedon;
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -54,22 +109,33 @@
         {
             if (PageState.Action == "Edit")
             {
-                _id = Int32.Parse(PageState.QueryString["id"]);
-                ResourceModel resource = await ClientResourceService.GetResourceAsync(_id, ModuleState.ModuleId);
-                if (resource != null)
-                {
-                    _name = resource.Name;
-                    _createdby = resource.CreatedBy;
-                    _createdon = resource.CreatedOn;
-                    _modifiedby = resource.ModifiedBy;
-                    _modifiedon = resource.ModifiedOn;
-                }
+                _id = int.Parse(PageState.QueryString["id"]);
+                await LoadResourceAsync();
             }
         }
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error Loading Resource {ResourceId} {Error}", _id, ex.Message);
             AddModuleMessage(Localizer["Message.LoadError"], MessageType.Error);
+        }
+    }
+
+    private async Task LoadResourceAsync()
+    {
+        ResourceModel resource = await ClientResourceService.GetResourceAsync(_id, ModuleState.ModuleId);
+        if (resource != null)
+        {
+            _name = resource.Name;
+            _description = resource.Description;
+            _resourceType = resource.ResourceType;
+            _isActive = resource.IsActive;
+            _maxCapacity = resource.MaxCapacity;
+            _bufferBeforeMinutes = resource.BufferBeforeMinutes;
+            _bufferAfterMinutes = resource.BufferAfterMinutes;
+            _createdby = resource.CreatedBy;
+            _createdon = resource.CreatedOn;
+            _modifiedby = resource.ModifiedBy;
+            _modifiedon = resource.ModifiedOn;
         }
     }
 
@@ -83,9 +149,17 @@
             {
                 if (PageState.Action == "Add")
                 {
-                    ResourceModel resource = new ResourceModel();
-                    resource.ModuleId = ModuleState.ModuleId;
-                    resource.Name = _name;
+                    ResourceModel resource = new ResourceModel
+                    {
+                        ModuleId = ModuleState.ModuleId,
+                        Name = _name,
+                        Description = _description,
+                        ResourceType = _resourceType,
+                        IsActive = _isActive,
+                        MaxCapacity = _maxCapacity,
+                        BufferBeforeMinutes = _bufferBeforeMinutes,
+                        BufferAfterMinutes = _bufferAfterMinutes
+                    };
                     resource = await ClientResourceService.AddResourceAsync(resource);
                     await logger.LogInformation("Resource Added {Resource}", resource);
                 }
@@ -93,10 +167,16 @@
                 {
                     ResourceModel resource = await ClientResourceService.GetResourceAsync(_id, ModuleState.ModuleId);
                     resource.Name = _name;
-                    await ClientResourceService.UpdateResourceAsync(resource);
+                    resource.Description = _description;
+                    resource.ResourceType = _resourceType;
+                    resource.IsActive = _isActive;
+                    resource.MaxCapacity = _maxCapacity;
+                    resource.BufferBeforeMinutes = _bufferBeforeMinutes;
+                    resource.BufferAfterMinutes = _bufferAfterMinutes;
+                    resource = await ClientResourceService.UpdateResourceAsync(resource);
                     await logger.LogInformation("Resource Updated {Resource}", resource);
                 }
-                NavigationManager.NavigateTo(NavigateUrl());
+                NavigationManager.NavigateTo(NavigateUrl(ModuleState.ModuleId, "BackOffice"));
             }
             else
             {

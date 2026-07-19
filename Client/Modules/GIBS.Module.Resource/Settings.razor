@@ -5,26 +5,131 @@
 @inject IStringLocalizer<Settings> Localizer
 
 <div class="container">
-    <div class="row mb-1 align-items-center">
-        <Label Class="col-sm-3" For="value" HelpText="Enter a value" ResourceKey="SettingName" ResourceType="@resourceType">Name: </Label>
-            <div class="col-sm-9">
-                <input id="value" type="text" class="form-control" @bind="@_value" />
-            </div>
+    <div class="row mb-3">
+        <div class="col">
+            <h5>General Settings</h5>
+        </div>
     </div>
+
+    <div class="row mb-3 align-items-center">
+        <Label Class="col-sm-3" For="customTitle" HelpText="Title displayed on the booking calendar" ResourceKey="CustomTitle" ResourceType="@resourceType">Custom Title: </Label>
+        <div class="col-sm-9">
+            <input id="customTitle" type="text" class="form-control" @bind="@_customTitle" placeholder="Booking Calendar" />
+        </div>
+    </div>
+
+    <div class="row mb-3 align-items-center">
+        <Label Class="col-sm-3" For="statusDefault" HelpText="Default status for new reservations" ResourceKey="StatusDefault" ResourceType="@resourceType">Default Status: </Label>
+        <div class="col-sm-9">
+            <select id="statusDefault" class="form-select" @bind="@_statusDefault">
+                <option value="Pending">Pending</option>
+                <option value="Confirmed">Confirmed</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row mb-3 align-items-center">
+        <Label Class="col-sm-3" For="cancellationPolicy" HelpText="Cancellation policy text" ResourceKey="CancellationPolicy" ResourceType="@resourceType">Cancellation Policy: </Label>
+        <div class="col-sm-9">
+            <textarea id="cancellationPolicy" class="form-control" rows="6" @bind="@_cancellationPolicy"></textarea>
+        </div>
+    </div>
+
+    <div class="row mb-3 align-items-center">
+        <Label Class="col-sm-3" For="emailNotification" HelpText="Email address for notifications" ResourceKey="EmailNotification" ResourceType="@resourceType">Email Notification: </Label>
+        <div class="col-sm-9">
+            <input id="emailNotification" type="email" class="form-control" @bind="@_emailNotification" placeholder="notifications@example.com" />
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col">
+            <hr />
+            <h5>Twilio SMS Settings</h5>
+        </div>
+    </div>
+
+    <div class="row mb-3 align-items-center">
+        <Label Class="col-sm-3" For="enableTwilio" HelpText="Enable Twilio SMS notifications" ResourceKey="EnableTwilio" ResourceType="@resourceType">Enable Twilio: </Label>
+        <div class="col-sm-9">
+            <div class="form-check">
+                <input id="enableTwilio" type="checkbox" class="form-check-input" @bind="@_enableTwilio" />
+                <label class="form-check-label" for="enableTwilio">Enable SMS notifications via Twilio</label>
+            </div>
+        </div>
+    </div>
+
+    @if (_enableTwilio)
+    {
+        <div class="row mb-3 align-items-center">
+            <Label Class="col-sm-3" For="twilioAccountSid" HelpText="Twilio Account SID" ResourceKey="TwilioAccountSid" ResourceType="@resourceType">Account SID: </Label>
+            <div class="col-sm-9">
+                <input id="twilioAccountSid" type="text" class="form-control" @bind="@_twilioAccountSid" placeholder="AC..." />
+            </div>
+        </div>
+
+        <div class="row mb-3 align-items-center">
+            <Label Class="col-sm-3" For="twilioAuthToken" HelpText="Twilio Auth Token" ResourceKey="TwilioAuthToken" ResourceType="@resourceType">Auth Token: </Label>
+            <div class="col-sm-9">
+                <input id="twilioAuthToken" type="password" class="form-control" @bind="@_twilioAuthToken" />
+            </div>
+        </div>
+
+        <div class="row mb-3 align-items-center">
+            <Label Class="col-sm-3" For="twilioPhoneNumber" HelpText="Twilio Phone Number (from)" ResourceKey="TwilioPhoneNumber" ResourceType="@resourceType">From Phone Number: </Label>
+            <div class="col-sm-9">
+                <input id="twilioPhoneNumber" type="tel" class="form-control" @bind="@_twilioPhoneNumber" placeholder="+1234567890" />
+            </div>
+        </div>
+
+        <div class="row mb-3 align-items-center">
+            <Label Class="col-sm-3" For="twilioMessageURL" HelpText="Twilio Messaging Service URL" ResourceKey="TwilioMessageURL" ResourceType="@resourceType">Message URL: </Label>
+            <div class="col-sm-9">
+                <input id="twilioMessageURL" type="url" class="form-control" @bind="@_twilioMessageURL" placeholder="https://api.twilio.com/..." />
+            </div>
+        </div>
+
+        <div class="row mb-3 align-items-center">
+            <Label Class="col-sm-3" For="twilioSendToNumber" HelpText="Default recipient phone number" ResourceKey="TwilioSendToNumber" ResourceType="@resourceType">Send To Number: </Label>
+            <div class="col-sm-9">
+                <input id="twilioSendToNumber" type="tel" class="form-control" @bind="@_twilioSendToNumber" placeholder="+1234567890" />
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private string resourceType = "GIBS.Module.Resource.Settings, GIBS.Module.Resource.Client.Oqtane"; // for localization
     public override string Title => "Resource Settings";
 
-    string _value;
+    private string _customTitle;
+    private string _statusDefault;
+    private string _cancellationPolicy;
+    private string _emailNotification;
+    private bool _enableTwilio;
+    private string _twilioAccountSid;
+    private string _twilioAuthToken;
+    private string _twilioPhoneNumber;
+    private string _twilioMessageURL;
+    private string _twilioSendToNumber;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             Dictionary<string, string> settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
-            _value = SettingService.GetSetting(settings, "SettingName", "");
+
+            _customTitle = SettingService.GetSetting(settings, "CustomTitle", "Booking Calendar");
+            _statusDefault = SettingService.GetSetting(settings, "StatusDefault", "Pending");
+            _cancellationPolicy = SettingService.GetSetting(settings, "CancellationPolicy", 
+                "This Resource Booking Cancellation Policy requires all cancellations or modifications to be submitted at least 24 hours prior to the scheduled reservation time to receive a full credit or avoid penalty fees. Cancellations made within this 24-hour window, as well as failure to arrive within 15 minutes of the start time, will result in a 100% forfeiture of the booking fee or a late-cancellation charge. Exceptions are made solely at the discretion of management for documented emergencies or verified facility closures due to severe inclement weather or technical outages.");
+            _emailNotification = SettingService.GetSetting(settings, "EmailNotification", "");
+            _enableTwilio = bool.Parse(SettingService.GetSetting(settings, "EnableTwilio", "false"));
+            _twilioAccountSid = SettingService.GetSetting(settings, "TwilioAccountSid", "");
+            _twilioAuthToken = SettingService.GetSetting(settings, "TwilioAuthToken", "");
+            _twilioPhoneNumber = SettingService.GetSetting(settings, "TwilioPhoneNumber", "");
+            _twilioMessageURL = SettingService.GetSetting(settings, "TwilioMessageURL", "");
+            _twilioSendToNumber = SettingService.GetSetting(settings, "TwilioSendToNumber", "");
         }
         catch (Exception ex)
         {
@@ -37,7 +142,18 @@
         try
         {
             var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
-            settings = SettingService.SetSetting(settings, "SettingName", _value);
+
+            settings = SettingService.SetSetting(settings, "CustomTitle", _customTitle);
+            settings = SettingService.SetSetting(settings, "StatusDefault", _statusDefault);
+            settings = SettingService.SetSetting(settings, "CancellationPolicy", _cancellationPolicy);
+            settings = SettingService.SetSetting(settings, "EmailNotification", _emailNotification);
+            settings = SettingService.SetSetting(settings, "EnableTwilio", _enableTwilio.ToString());
+            settings = SettingService.SetSetting(settings, "TwilioAccountSid", _twilioAccountSid);
+            settings = SettingService.SetSetting(settings, "TwilioAuthToken", _twilioAuthToken);
+            settings = SettingService.SetSetting(settings, "TwilioPhoneNumber", _twilioPhoneNumber);
+            settings = SettingService.SetSetting(settings, "TwilioMessageURL", _twilioMessageURL);
+            settings = SettingService.SetSetting(settings, "TwilioSendToNumber", _twilioSendToNumber);
+
             await SettingService.UpdateModuleSettingsAsync(settings, ModuleState.ModuleId);
         }
         catch (Exception ex)

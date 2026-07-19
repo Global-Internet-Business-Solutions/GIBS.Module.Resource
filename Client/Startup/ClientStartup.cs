@@ -13,6 +13,16 @@ namespace GIBS.Module.Resource.Startup
             {
                 services.AddScoped<IResourceService, ClientResourceService>();
             }
+
+            if (!services.Any(s => s.ServiceType == typeof(IReservationService)))
+            {
+                services.AddScoped<IReservationService, ClientReservationService>();
+            }
+
+            if (!services.Any(s => s.ServiceType == typeof(IResourceAvailabilityService)))
+            {
+                services.AddScoped<IResourceAvailabilityService, ClientResourceAvailabilityService>();
+            }
         }
     }
 }

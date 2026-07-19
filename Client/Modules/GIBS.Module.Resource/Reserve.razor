@@ -1,0 +1,287 @@
+@using Oqtane.Modules.Controls
+@using GIBS.Module.Resource.Services
+@using ResourceModel = GIBS.Module.Resource.Models.Resource
+@using AvailabilityModel = GIBS.Module.Resource.Models.ResourceAvailability
+@using ReservationModel = GIBS.Module.Resource.Models.Reservation
+@using ReservationStatusModel = GIBS.Module.Resource.Models.ReservationStatus
+
+@namespace GIBS.Module.Resource
+@inherits ModuleBase
+@inject IResourceService ClientResourceService
+@inject IReservationService ClientReservationService
+@inject IResourceAvailabilityService ClientResourceAvailabilityService
+@inject NavigationManager NavigationManager
+@inject ISettingService SettingService
+
+@if (_resource == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Reserve @_resource.Name</h5>
+            <p class="card-text mb-1"><strong>Date:</strong> @_selectedDate.ToString("D")</p>
+            <p class="card-text mb-3"><strong>Type:</strong> @(string.IsNullOrWhiteSpace(_resource.ResourceType) ? "-" : _resource.ResourceType)</p>
+
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center" 
+                     style="cursor: pointer;" 
+                     @onclick="() => _showAvailabilities = !_showAvailabilities">
+                    <h6 class="mb-0">Other Available Times</h6>
+                    <span class="oi oi-chevron-@(_showAvailabilities ? "up" : "down")"></span>
+                </div>
+                @if (_showAvailabilities)
+                {
+                    <div class="card-body p-0">
+                        @if (_selectedDateAvailabilities.Count == 0)
+                        {
+                            <p class="text-muted p-3 mb-0">No availability windows for this day.</p>
+                        }
+                        else
+                        {
+                            <ul class="list-group list-group-flush">
+                                @foreach (var availability in _selectedDateAvailabilities)
+                                {
+                                    var isBooked = IsAvailabilityBooked(availability);
+                                    <li class="list-group-item d-flex justify-content-between align-items-center @(isBooked ? "" : "")" 
+                                        style="cursor: @(isBooked ? "not-allowed" : "pointer");"
+                                        @onclick="@(isBooked ? null : () => SelectAvailability(availability))">
+                                        <span class="@(isBooked ? "text-muted" : "")">
+                                            @DateTime.Today.Add(availability.StartTime).ToString("h:mm tt") - @DateTime.Today.Add(availability.EndTime).ToString("h:mm tt")
+                                        </span>
+                                        @if (isBooked)
+                                        {
+                                            <span class="badge bg-primary">Booked</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">Available</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            </div>
+
+            <form @ref="form" class="@(validated ? " was-validated" : "needs-validation" )" novalidate>
+                <div class="row mb-2">
+                    <div class="col-md-6">
+                        <Label Class="form-label" For="startTime">Start</Label>
+                        <input id="startTime" type="datetime-local" class="form-control" @bind-value="@_startTime" @bind-value:format="yyyy-MM-ddTHH:mm" required readonly />
+                    </div>
+                    <div class="col-md-6">
+                        <Label Class="form-label" For="endTime">End</Label>
+                        <input id="endTime" type="datetime-local" class="form-control" @bind-value="@_endTime" @bind-value:format="yyyy-MM-ddTHH:mm" required readonly />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <Label Class="form-label" For="notes">Notes</Label>
+                    <textarea id="notes" class="form-control" @bind="@_notes"></textarea>
+                </div>
+
+                <button type="button" class="btn btn-primary me-2" @onclick="SaveReservation">Reserve</button>
+                <NavLink class="btn btn-secondary" href="@NavigateUrl()">Cancel</NavLink>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.View;
+
+    public override string Actions => "Reserve";
+
+    public override string Title => "Reserve Resource";
+
+    public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    {
+        new Stylesheet("_content/GIBS.Module.Resource/Module.css")
+    };
+
+    private ElementReference form;
+    private bool validated;
+    private int _resourceId;
+    private DateTime _selectedDate = DateTime.Today;
+    private ResourceModel _resource;
+    private List<AvailabilityModel> _selectedDateAvailabilities = new();
+    private List<ReservationModel> _selectedDateReservations = new();
+    private DateTime _startTime;
+    private DateTime _endTime;
+    private string _notes;
+    private bool _showAvailabilities = false;
+    private string _defaultStatus;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            _defaultStatus = SettingService.GetSetting(settings, "StatusDefault", "Pending");
+            _resourceId = int.Parse(PageState.QueryString["id"]);
+            var queryDateValue = GetQueryValue("date");
+            if (!string.IsNullOrEmpty(queryDateValue) && DateTime.TryParse(queryDateValue, out var parsedDate))
+            {
+                _selectedDate = parsedDate.Date;
+            }
+
+            _resource = await ClientResourceService.GetResourceAsync(_resourceId, ModuleState.ModuleId);
+            if (_resource == null)
+            {
+                AddModuleMessage("Resource not found.", MessageType.Error);
+                return;
+            }
+
+            var availabilities = await ClientResourceAvailabilityService.GetAvailabilitiesAsync(_resourceId, ModuleState.ModuleId) ?? new List<AvailabilityModel>();
+            _selectedDateAvailabilities = availabilities.Where(item => item.DayOfWeek == _selectedDate.DayOfWeek).OrderBy(item => item.StartTime).ToList();
+
+            var reservations = await ClientReservationService.GetReservationsAsync(_resourceId, ModuleState.ModuleId) ?? new List<ReservationModel>();
+            _selectedDateReservations = reservations
+                .Where(item => item.Status != ReservationStatusModel.Cancelled)
+                .Where(item => item.EndTime > _selectedDate.Date && item.StartTime < _selectedDate.Date.AddDays(1))
+                .ToList();
+
+            if (_selectedDateAvailabilities.Count > 0)
+            {
+                var first = _selectedDateAvailabilities.First();
+                _startTime = _selectedDate.Date + first.StartTime;
+                _endTime = _selectedDate.Date + first.EndTime;
+            }
+            else
+            {
+                _startTime = _selectedDate.Date.AddHours(9);
+                _endTime = _selectedDate.Date.AddHours(10);
+            }
+
+            if (TryGetQueryDateTime("startdate", out var startDateTime) ||
+                TryGetQueryDateTime("starttime", out startDateTime) ||
+                TryGetQueryDateTime("start", out startDateTime))
+            {
+                _startTime = startDateTime;
+                _selectedDate = startDateTime.Date;
+            }
+            else if (TryGetQueryTime("starttime", out var startSpan) ||
+                     TryGetQueryTime("start", out startSpan))
+            {
+                _startTime = _selectedDate.Date + startSpan;
+            }
+
+            if (TryGetQueryDateTime("enddate", out var endDateTime) ||
+                TryGetQueryDateTime("endtime", out endDateTime) ||
+                TryGetQueryDateTime("end", out endDateTime))
+            {
+                _endTime = endDateTime;
+                if (_startTime == default)
+                {
+                    _selectedDate = endDateTime.Date;
+                }
+            }
+            else if (TryGetQueryTime("endtime", out var endSpan) ||
+                     TryGetQueryTime("end", out endSpan))
+            {
+                _endTime = _selectedDate.Date + endSpan;
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading reserve page {Error}", ex.Message);
+            AddModuleMessage("Error loading reservation page.", MessageType.Error);
+        }
+    }
+
+    private bool TryGetQueryDateTime(string key, out DateTime value)
+    {
+        value = default;
+        var queryValue = GetQueryValue(key);
+        return !string.IsNullOrEmpty(queryValue) && HasDateComponent(queryValue) && DateTime.TryParse(queryValue, out value);
+    }
+
+    private bool TryGetQueryTime(string key, out TimeSpan value)
+    {
+        value = default;
+        var queryValue = GetQueryValue(key);
+        return !string.IsNullOrEmpty(queryValue) && TimeSpan.TryParse(queryValue, out value);
+    }
+
+    private static bool HasDateComponent(string queryValue)
+    {
+        return queryValue.Contains('-') || queryValue.Contains('/') || queryValue.Contains('T');
+    }
+
+    private string GetQueryValue(string key)
+    {
+        if (PageState.QueryString.TryGetValue(key, out var exactValue))
+        {
+            return exactValue;
+        }
+
+        var match = PageState.QueryString.FirstOrDefault(item => string.Equals(item.Key, key, StringComparison.OrdinalIgnoreCase));
+        return match.Equals(default(KeyValuePair<string, string>)) ? null : match.Value;
+    }
+
+    private bool IsAvailabilityBooked(AvailabilityModel availability)
+    {
+        var slotStart = _selectedDate.Date + availability.StartTime;
+        var slotEnd = _selectedDate.Date + availability.EndTime;
+
+        return _selectedDateReservations.Any(item => item.StartTime < slotEnd && item.EndTime > slotStart);
+    }
+
+    private void SelectAvailability(AvailabilityModel availability)
+    {
+        _startTime = _selectedDate.Date + availability.StartTime;
+        _endTime = _selectedDate.Date + availability.EndTime;
+    }
+
+    private async Task SaveReservation()
+    {
+        try
+        {
+            validated = true;
+            var interop = new Oqtane.UI.Interop(JSRuntime);
+            if (!await interop.FormValid(form))
+            {
+                AddModuleMessage("Please enter a valid time range.", MessageType.Warning);
+                return;
+            }
+
+            if (PageState.User == null || PageState.User.UserId <= 0)
+            {
+                AddModuleMessage("You must be signed in to reserve a resource.", MessageType.Warning);
+                return;
+            }
+
+            var reservation = new ReservationModel
+            {
+                ResourceId = _resourceId,
+                UserId = PageState.User.UserId,
+                StartTime = _startTime,
+                EndTime = _endTime,
+                Status = Enum.TryParse<ReservationStatusModel>(_defaultStatus, out var defaultStatus) ? defaultStatus : ReservationStatusModel.Pending,
+                Notes = _notes,
+                CreatedBy = PageState.User.Username,
+                CreatedOn = DateTime.UtcNow,
+                ModifiedBy = PageState.User.Username,
+                ModifiedOn = DateTime.UtcNow
+            };
+
+            var result = await ClientReservationService.AddReservationAsync(reservation, ModuleState.ModuleId);
+            if (result == null)
+            {
+                AddModuleMessage("Reservation failed. Check availability and existing bookings.", MessageType.Warning);
+                return;
+            }
+
+            NavigationManager.NavigateTo(NavigateUrl() + "?day=" + _selectedDate.ToString("yyyy-MM-dd"));
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error creating reservation {Error}", ex.Message);
+            AddModuleMessage("Error creating reservation.", MessageType.Error);
+        }
+    }
+}

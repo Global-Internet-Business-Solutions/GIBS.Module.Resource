@@ -10,6 +10,7 @@ namespace GIBS.Module.Resource.Repository
         IEnumerable<Models.Resource> GetResources(int ModuleId);
         Models.Resource GetResource(int ResourceId);
         Models.Resource GetResource(int ResourceId, bool tracking);
+        Models.Resource GetResourceForModule(int ResourceId, int ModuleId, bool activeOnly = false, bool tracking = false);
         Models.Resource AddResource(Models.Resource Resource);
         Models.Resource UpdateResource(Models.Resource Resource);
         void DeleteResource(int ResourceId);
@@ -46,6 +47,16 @@ namespace GIBS.Module.Resource.Repository
             {
                 return db.Resource.AsNoTracking().FirstOrDefault(item => item.ResourceId == ResourceId);
             }
+        }
+
+        public Models.Resource GetResourceForModule(int ResourceId, int ModuleId, bool activeOnly = false, bool tracking = false)
+        {
+            using var db = _factory.CreateDbContext();
+            var query = tracking ? db.Resource : db.Resource.AsNoTracking();
+            return query.FirstOrDefault(item =>
+                item.ResourceId == ResourceId &&
+                item.ModuleId == ModuleId &&
+                (!activeOnly || item.IsActive));
         }
 
         public Models.Resource AddResource(Models.Resource Resource)

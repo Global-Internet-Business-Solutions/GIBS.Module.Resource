@@ -1,11 +1,17 @@
 @using GIBS.Module.Resource.Services
 @using ResourceModel = GIBS.Module.Resource.Models.Resource
+@using ReservationModel = GIBS.Module.Resource.Models.Reservation
+@using AvailabilityModel = GIBS.Module.Resource.Models.ResourceAvailability
+@using ReservationStatusModel = GIBS.Module.Resource.Models.ReservationStatus
 
 @namespace GIBS.Module.Resource
 @inherits ModuleBase
 @inject IResourceService ClientResourceService
-@inject NavigationManager NavigationManager
+@inject IReservationService ClientReservationService
+@inject IResourceAvailabilityService ClientResourceAvailabilityService
 @inject IStringLocalizer<Index> Localizer
+@inject NavigationManager NavigationManager
+@inject ISettingService SettingService
 
 @if (_Resources == null)
 {
@@ -13,32 +19,138 @@
 }
 else
 {
-    <ActionLink Action="Add" Security="SecurityAccessLevel.Edit" Text="Add Resource" ResourceKey="Add" />
-    <br />
-    <br />
-    @if (@_Resources.Count != 0)
-    {
-        <Pager Items="@_Resources">
-            <Header>
-                <th style="width: 1px;">&nbsp;</th>
-                <th style="width: 1px;">&nbsp;</th>
-                <th>@Localizer["Name"]</th>
-            </Header>
-            <Row>
-                <td><ActionLink Action="Edit" Parameters="@($"id=" + context.ResourceId.ToString())" ResourceKey="Edit"  /></td>
-                <td><ActionDialog Header="Delete Resource" Message="Are You Sure You Wish To Delete This Resource?" Action="Delete" Security="SecurityAccessLevel.Edit" Class="btn btn-danger" OnClick="@(async () => await Delete(context))" ResourceKey="Delete"  Id="@context.ResourceId.ToString()" /></td>
-                <td>@context.Name</td>
-            </Row>
-        </Pager>
-    }
-    else
-    {
-        <p>@Localizer["Message.DisplayNone"]</p>
-    }
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">@_customTitle</h5>
+        <div>
+            <ActionLink Action="MyBookings" Security="SecurityAccessLevel.View" Text="My Bookings" />
+            <ActionLink Action="ResourceList" Security="SecurityAccessLevel.View" Text="Resources" IconName="oi oi-layers" AltText="View All Resources" IconOnly="true" />
+            <ActionLink Action="BackOffice" Security="SecurityAccessLevel.Edit" Text="Back Office" /> 
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Calendar Column - 9 columns -->
+        <div class="col-lg-9">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="PreviousMonth">Previous</button>
+                <h6 class="mb-0">@_displayMonth.ToString("MMMM yyyy")</h6>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="NextMonth">Next</button>
+            </div>
+            <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle">
+                <thead>
+                    <tr>
+                        @foreach (var dayName in _dayNames)
+                        {
+                            <th class="text-center">@dayName</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var week in CalendarWeeks)
+                    {
+                        <tr>
+                            @foreach (var day in week)
+                            {
+                                var dayAvailabilities = GetBookableDayAvailabilities(day);
+                                var dayReservations = GetDayReservations(day);
+                                <td class="@(IsCurrentMonth(day) ? string.Empty : "bg-light text-muted")" style="vertical-align: top; min-width: 110px; height: 92px; cursor: pointer;" @onclick="() => SelectDate(day)">
+                                    <div class="fw-bold">@day.Day</div>
+                                    @if (dayAvailabilities.Count > 0)
+                                    {
+                                        <div>
+                                            <button type="button" class="btn btn-sm btn-success p-0 px-1" @onclick="() => SelectAvailableDate(day)" @onclick:stopPropagation="true">
+                                                @dayAvailabilities.Count Available
+                                            </button>
+                                        </div>
+                                    }
+                                    @if (dayReservations.Count > 0)
+                                    {
+                                        <div><span class="badge bg-primary">@dayReservations.Count Booked</span></div>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            </div>
+            </div>
+
+        <!-- Details Column - 3 columns -->
+        <div class="col-lg-3">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">@_selectedDate.ToString("D")</h6>
+                </div>
+                <div class="card-body">
+                    <h6 class="mb-2">Availability</h6>
+                    @if (SelectedDateAvailabilities.Count == 0)
+                    {
+                        <p class="text-muted small">No availability windows.</p>
+                    }
+                    else
+                    {
+                        @foreach (var resourceGroup in SelectedDateAvailabilities.GroupBy(a => new { a.ResourceId, a.ResourceName }))
+                        {
+                            <div class="card mb-2">
+                                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                                    <strong class="small">@resourceGroup.Key.ResourceName</strong>
+                                    <a href="@NavigateUrl(ModuleState.ModuleId,"ResourceDetails", $"id={resourceGroup.Key.ResourceId}")" 
+                                       class="text-decoration-none" 
+                                       title="View Details">
+                                        <i class="oi oi-info text-dark"></i>
+                                    </a>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="d-grid gap-1">
+                                        @foreach (var item in resourceGroup)
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center small">
+                                                <span>@DateTime.Today.Add(item.StartTime).ToString("h:mm tt") - @DateTime.Today.Add(item.EndTime).ToString("h:mm tt")</span>
+                                                <ActionLink Action="Reserve" 
+                                                           Parameters="@($"id={item.ResourceId}&date={_selectedDate:yyyy-MM-dd}&startTime={item.StartTime:hh\\:mm}&endTime={item.EndTime:hh\\:mm}")" 
+                                                           Security="SecurityAccessLevel.View" 
+                                                           Text="Reserve"
+                                                           Class="btn btn-primary btn-sm py-0 px-2" />
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    <h6 class="mt-3 mb-2">Bookings</h6>
+                    @if (SelectedDateReservations.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">No bookings.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var item in SelectedDateReservations)
+                            {
+                                <div class="list-group-item px-0 py-2 small">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>@item.ResourceName</strong><br />
+                                            <span class="text-muted">@item.StartTime.ToString("h:mm tt") - @item.EndTime.ToString("h:mm tt")</span>
+                                        </div>
+                                        <span class="badge @GetReservationStatusBadgeClass(item.Status)">@item.Status</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
-    public override string RenderMode => RenderModes.Static;
+    public override string RenderMode => RenderModes.Interactive;
 
     public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
     {
@@ -46,34 +158,266 @@ else
         new Script("_content/GIBS.Module.Resource/Module.js")
     };
 
-    List<ResourceModel> _Resources;
+    private List<ResourceModel> _Resources;
+    private readonly Dictionary<DateOnly, List<ReservationDisplayItem>> _reservationsByDate = new();
+    private readonly Dictionary<DayOfWeek, List<AvailabilityDisplayItem>> _availabilitiesByDayOfWeek = new();
+    private DateTime _displayMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime _selectedDate = DateTime.Today;
+    private readonly string[] _dayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+    private string _customTitle = "Booking Calendar";
+
+    private List<List<DateTime>> CalendarWeeks => BuildCalendarWeeks();
+
+    private List<ReservationDisplayItem> SelectedDateReservations =>
+        _reservationsByDate.TryGetValue(DateOnly.FromDateTime(_selectedDate.Date), out var reservations)
+            ? reservations.OrderBy(item => item.StartTime).ToList()
+            : new List<ReservationDisplayItem>();
+
+    private List<AvailabilityDisplayItem> SelectedDateAvailabilities { get; set; } = new();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            _customTitle = SettingService.GetSetting(ModuleState.Settings, "CustomTitle", "Booking Calendar");
+            // Check for day querystring parameter
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var dayParam = query["day"];
+
+            if (!string.IsNullOrEmpty(dayParam) && DateTime.TryParse(dayParam, out var parsedDate))
+            {
+                _selectedDate = parsedDate.Date;
+                _displayMonth = new(parsedDate.Year, parsedDate.Month, 1);
+            }
+
             _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+            await LoadAvailabilitiesAsync();
+            await LoadReservationsAsync();
+            SetSelectedDate(_selectedDate);
         }
         catch (Exception ex)
         {
-            await logger.LogError(ex, "Error Loading Resource {Error}", ex.Message);
+            await logger.LogError(ex, "Error Loading Calendar Data {Error}", ex.Message);
             AddModuleMessage(Localizer["Message.LoadError"], MessageType.Error);
         }
     }
 
-    private async Task Delete(ResourceModel resource)
+    private async Task LoadAvailabilitiesAsync()
     {
-        try
+        _availabilitiesByDayOfWeek.Clear();
+        if (_Resources == null)
         {
-            await ClientResourceService.DeleteResourceAsync(resource.ResourceId, ModuleState.ModuleId);
-            await logger.LogInformation("Resource Deleted {Resource}", resource);
-            _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
-            StateHasChanged();
+            return;
         }
-        catch (Exception ex)
+
+        foreach (var resource in _Resources)
         {
-            await logger.LogError(ex, "Error Deleting Resource {Resource} {Error}", resource, ex.Message);
-            AddModuleMessage(Localizer["Message.DeleteError"], MessageType.Error);
+            var availabilities = await ClientResourceAvailabilityService.GetAvailabilitiesAsync(resource.ResourceId, ModuleState.ModuleId);
+            if (availabilities == null)
+            {
+                continue;
+            }
+
+            foreach (var availability in availabilities)
+            {
+                if (!_availabilitiesByDayOfWeek.TryGetValue(availability.DayOfWeek, out var list))
+                {
+                    list = new List<AvailabilityDisplayItem>();
+                    _availabilitiesByDayOfWeek[availability.DayOfWeek] = list;
+                }
+
+                list.Add(new AvailabilityDisplayItem
+                {
+                    ResourceId = resource.ResourceId,
+                    ResourceName = resource.Name,
+                    DayOfWeek = availability.DayOfWeek,
+                    StartTime = availability.StartTime,
+                    EndTime = availability.EndTime
+                });
+            }
         }
+    }
+
+    private async Task LoadReservationsAsync()
+    {
+        _reservationsByDate.Clear();
+        if (_Resources == null)
+        {
+            return;
+        }
+
+        foreach (var resource in _Resources)
+        {
+            var reservations = await ClientReservationService.GetReservationsAsync(resource.ResourceId, ModuleState.ModuleId);
+            if (reservations == null)
+            {
+                continue;
+            }
+
+            foreach (var reservation in reservations)
+            {
+                if (reservation.Status == ReservationStatusModel.Cancelled)
+                {
+                    continue;
+                }
+
+                foreach (var date in EnumerateReservationDates(reservation))
+                {
+                    if (!_reservationsByDate.TryGetValue(date, out var list))
+                    {
+                        list = new List<ReservationDisplayItem>();
+                        _reservationsByDate[date] = list;
+                    }
+
+                    list.Add(new ReservationDisplayItem
+                    {
+                        ReservationId = reservation.ReservationId,
+                        ResourceId = reservation.ResourceId,
+                        ResourceName = resource.Name,
+                        StartTime = reservation.StartTime,
+                        EndTime = reservation.EndTime,
+                        Status = reservation.Status.ToString()
+                    });
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<DateOnly> EnumerateReservationDates(ReservationModel reservation)
+    {
+        var current = DateOnly.FromDateTime(reservation.StartTime.Date);
+        var end = DateOnly.FromDateTime(reservation.EndTime.Date);
+
+        while (current <= end)
+        {
+            yield return current;
+            current = current.AddDays(1);
+        }
+    }
+
+    private List<List<DateTime>> BuildCalendarWeeks()
+    {
+        var firstDay = new DateTime(_displayMonth.Year, _displayMonth.Month, 1);
+        var gridStart = firstDay.AddDays(-(int)firstDay.DayOfWeek);
+
+        var weeks = new List<List<DateTime>>();
+        for (var week = 0; week < 6; week++)
+        {
+            var days = new List<DateTime>();
+            for (var day = 0; day < 7; day++)
+            {
+                days.Add(gridStart.AddDays((week * 7) + day));
+            }
+            weeks.Add(days);
+        }
+
+        return weeks;
+    }
+
+    private bool IsCurrentMonth(DateTime day)
+    {
+        return day.Month == _displayMonth.Month && day.Year == _displayMonth.Year;
+    }
+
+    private List<ReservationDisplayItem> GetDayReservations(DateTime day)
+    {
+        return _reservationsByDate.TryGetValue(DateOnly.FromDateTime(day.Date), out var reservations)
+            ? reservations
+            : new List<ReservationDisplayItem>();
+    }
+
+    private List<AvailabilityDisplayItem> GetDayAvailabilities(DateTime day)
+    {
+        return _availabilitiesByDayOfWeek.TryGetValue(day.DayOfWeek, out var availabilities)
+            ? availabilities
+            : new List<AvailabilityDisplayItem>();
+    }
+
+    private List<AvailabilityDisplayItem> GetBookableDayAvailabilities(DateTime day)
+    {
+        var now = DateTime.Now;
+        var today = now.Date;
+
+        return GetDayAvailabilities(day)
+            .Where(item => day.Date >= today)
+            .Where(item => (day.Date > today) || (day.Date + item.StartTime > now))
+            .Where(item => !IsAvailabilityBooked(day, item))
+            .ToList();
+    }
+
+    private bool IsAvailabilityBooked(DateTime day, AvailabilityDisplayItem availability)
+    {
+        var slotStart = day.Date + availability.StartTime;
+        var slotEnd = day.Date + availability.EndTime;
+
+        return GetDayReservations(day).Any(reservation =>
+            reservation.ResourceId == availability.ResourceId &&
+            reservation.StartTime < slotEnd &&
+            reservation.EndTime > slotStart);
+    }
+
+    private void SelectDate(DateTime day)
+    {
+        SetSelectedDate(day);
+    }
+
+    private void SelectAvailableDate(DateTime day)
+    {
+        SetSelectedDate(day);
+    }
+
+    private void SetSelectedDate(DateTime day)
+    {
+        _selectedDate = day.Date;
+        SelectedDateAvailabilities = GetBookableDayAvailabilities(day)
+            .OrderBy(item => item.StartTime)
+            .ThenBy(item => item.ResourceName)
+            .ToList();
+    }
+
+    private void PreviousMonth()
+    {
+        _displayMonth = _displayMonth.AddMonths(-1);
+    }
+
+    private void NextMonth()
+    {
+        _displayMonth = _displayMonth.AddMonths(1);
+    }
+
+    private string GetReserveLink(int resourceId)
+    {
+        return NavigateUrl("Reserve", $"id={resourceId}&date={_selectedDate:yyyy-MM-dd}");
+    }
+
+    private string GetReservationStatusBadgeClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "pending" => "bg-warning",
+            "confirmed" => "bg-success",
+            "cancelled" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private class ReservationDisplayItem
+    {
+        public int ReservationId { get; set; }
+        public int ResourceId { get; set; }
+        public string ResourceName { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public string Status { get; set; }
+    }
+
+    private class AvailabilityDisplayItem
+    {
+        public int ResourceId { get; set; }
+        public string ResourceName { get; set; }
+        public DayOfWeek DayOfWeek { get; set; }
+        public TimeSpan StartTime { get; set; }
+        public TimeSpan EndTime { get; set; }
     }
 }

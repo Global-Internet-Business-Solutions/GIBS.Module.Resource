@@ -1,0 +1,186 @@
+@using GIBS.Module.Resource.Services
+@using AvailabilityModel = GIBS.Module.Resource.Models.ResourceAvailability
+
+@namespace GIBS.Module.Resource
+@inject IResourceAvailabilityService ClientResourceAvailabilityService
+
+<h5>Availability</h5>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert alert-@_messageType" role="alert">@_message</div>
+}
+
+<div class="container mb-2">
+    <div class="row mb-2">
+        <div class="col-md-4">
+            <label>Day</label>
+            <select class="form-select" @bind="@_availabilityDayOfWeek">
+                @foreach (var day in Enum.GetValues<DayOfWeek>())
+                {
+                    <option value="@day">@day</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label>Start</label>
+            <input type="text" class="form-control" placeholder="HH:mm" @bind="@_availabilityStartTime" />
+        </div>
+        <div class="col-md-4">
+            <label>End</label>
+            <input type="text" class="form-control" placeholder="HH:mm" @bind="@_availabilityEndTime" />
+        </div>
+    </div>
+    <button type="button" class="btn btn-primary me-1" @onclick="SaveAvailability">@(_editingAvailabilityId == 0 ? "Add Availability" : "Update Availability")</button>
+    @if (_editingAvailabilityId != 0)
+    {
+        <button type="button" class="btn btn-secondary" @onclick="ClearAvailabilityEdit">Cancel Edit</button>
+    }
+</div>
+
+@if (_availabilities != null && _availabilities.Count > 0)
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Day</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var availability in _availabilities)
+            {
+                <tr>
+                    <td>@availability.DayOfWeek</td>
+                    <td>@availability.StartTime</td>
+                    <td>@availability.EndTime</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-warning me-1" @onclick="(() => EditAvailability(availability))">Edit</button>
+                        <button type="button" class="btn btn-sm btn-danger" @onclick="(() => DeleteAvailability(availability.AvailabilityId))">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter]
+    public int ResourceId { get; set; }
+
+    [Parameter]
+    public int ModuleId { get; set; }
+
+    private readonly List<AvailabilityModel> _availabilities = new();
+    private int _editingAvailabilityId;
+    private DayOfWeek _availabilityDayOfWeek = DateTime.Now.DayOfWeek;
+    private string _availabilityStartTime = "08:00";
+    private string _availabilityEndTime = "09:00";
+    private string _message;
+    private string _messageType = "warning";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAvailabilitiesAsync();
+    }
+
+    private async Task LoadAvailabilitiesAsync()
+    {
+        _availabilities.Clear();
+        var availabilities = await ClientResourceAvailabilityService.GetAvailabilitiesAsync(ResourceId, ModuleId);
+        if (availabilities != null)
+        {
+            _availabilities.AddRange(availabilities);
+        }
+    }
+
+    private async Task SaveAvailability()
+    {
+        try
+        {
+            ClearMessage();
+
+            if (!TimeSpan.TryParse(_availabilityStartTime, out var startTime) || !TimeSpan.TryParse(_availabilityEndTime, out var endTime) || startTime >= endTime)
+            {
+                SetWarning("Availability time range is invalid.");
+                return;
+            }
+
+            var availability = new AvailabilityModel
+            {
+                AvailabilityId = _editingAvailabilityId,
+                ResourceId = ResourceId,
+                DayOfWeek = _availabilityDayOfWeek,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+
+            AvailabilityModel result = _editingAvailabilityId == 0
+                ? await ClientResourceAvailabilityService.AddAvailabilityAsync(availability, ModuleId)
+                : await ClientResourceAvailabilityService.UpdateAvailabilityAsync(availability, ModuleId);
+
+            if (result == null)
+            {
+                SetWarning("Availability save failed.");
+                return;
+            }
+
+            ClearAvailabilityEdit();
+            await LoadAvailabilitiesAsync();
+        }
+        catch
+        {
+            SetError("Error saving availability.");
+        }
+    }
+
+    private async Task DeleteAvailability(int availabilityId)
+    {
+        try
+        {
+            ClearMessage();
+            await ClientResourceAvailabilityService.DeleteAvailabilityAsync(availabilityId, ModuleId);
+            await LoadAvailabilitiesAsync();
+        }
+        catch
+        {
+            SetError("Error deleting availability.");
+        }
+    }
+
+    private void EditAvailability(AvailabilityModel availability)
+    {
+        ClearMessage();
+        _editingAvailabilityId = availability.AvailabilityId;
+        _availabilityDayOfWeek = availability.DayOfWeek;
+        _availabilityStartTime = availability.StartTime.ToString(@"hh\:mm");
+        _availabilityEndTime = availability.EndTime.ToString(@"hh\:mm");
+    }
+
+    private void ClearAvailabilityEdit()
+    {
+        _editingAvailabilityId = 0;
+     //   _availabilityDayOfWeek = DateTime.Now.DayOfWeek;
+        _availabilityStartTime = TimeOnly.Parse(_availabilityStartTime).AddHours(1).ToString("HH:mm");
+        _availabilityEndTime = TimeOnly.Parse(_availabilityEndTime).AddHours(1).ToString("HH:mm");
+    }
+
+    private void SetWarning(string message)
+    {
+        _message = message;
+        _messageType = "warning";
+    }
+
+    private void SetError(string message)
+    {
+        _message = message;
+        _messageType = "danger";
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

@@ -22,6 +22,14 @@ namespace GIBS.Module.Resource.Startup
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddTransient<IResourceService, ServerResourceService>();
+            services.AddTransient<IReservationService, ServerReservationService>();
+            services.AddTransient<IResourceAvailabilityService, ServerResourceAvailabilityService>();
+            services.AddTransient<ITwilioSmsService, TwilioSmsService>();
+
+            services.AddTransient<IResourceRepository, ResourceRepository>();
+            services.AddTransient<IReservationRepository, ReservationRepository>();
+            services.AddTransient<IResourceAvailabilityRepository, ResourceAvailabilityRepository>();
+
             services.AddDbContextFactory<ResourceContext>(opt => { }, ServiceLifetime.Transient);
         }
     }

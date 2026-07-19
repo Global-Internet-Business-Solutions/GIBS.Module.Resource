@@ -1,0 +1,230 @@
+@using GIBS.Module.Resource.Services
+@using ReservationModel = GIBS.Module.Resource.Models.Reservation
+@using ReservationStatusModel = GIBS.Module.Resource.Models.ReservationStatus
+
+@namespace GIBS.Module.Resource
+@inject IReservationService ClientReservationService
+@inject ISettingService SettingService
+
+<h5>Reservations</h5>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert alert-@_messageType" role="alert">@_message</div>
+}
+
+<div class="container mb-2">
+    <div class="row mb-1">
+        <div class="col-md-3">
+            <label>User Id</label>
+            <input type="number" class="form-control" min="1" @bind="@_reservationUserId" />
+        </div>
+        <div class="col-md-3">
+            <label>Start</label>
+            <input type="datetime-local" class="form-control" @bind-value="@_reservationStartTime" @bind-value:format="yyyy-MM-ddTHH:mm" />
+        </div>
+        <div class="col-md-3">
+            <label>End</label>
+            <input type="datetime-local" class="form-control" @bind-value="@_reservationEndTime" @bind-value:format="yyyy-MM-ddTHH:mm" />
+        </div>
+        <div class="col-md-3">
+            <label>Status</label>
+            <select class="form-select" @bind="@_reservationStatus">
+                @foreach (var status in Enum.GetValues<ReservationStatusModel>())
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+        </div>
+    </div>
+    <div class="row mb-2">
+        <div class="col-md-12">
+            <label>Notes</label>
+            <textarea class="form-control" @bind="@_reservationNotes"></textarea>
+        </div>
+    </div>
+    <button type="button" class="btn btn-primary me-1" @onclick="SaveReservation">@(_editingReservationId == 0 ? "Add Reservation" : "Update Reservation")</button>
+    @if (_editingReservationId != 0)
+    {
+        <button type="button" class="btn btn-secondary" @onclick="ClearReservationEdit">Cancel Edit</button>
+    }
+</div>
+
+@if (_reservations != null && _reservations.Count > 0)
+{
+    <Pager Items="@_reservations" Class="table table-sm" PageSize="10">
+        <Header>
+            <th>UserId</th>
+            <th>UserName</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Status</th>
+            <th>CreatedOn</th>
+            <th>Actions</th>
+        </Header>
+        <Row>
+            <td>@context.UserId</td>
+            <td>@(context.UserId > 0 ? context.UserName : context.UserId.ToString())</td>
+            <td>@context.StartTime.ToString("g")</td>
+            <td>@context.EndTime.ToString("g")</td>
+            <td>@context.Status</td>
+            <td>@context.CreatedOn.ToLocalTime().ToString("g")</td>
+
+            <td>
+                <button type="button" class="btn btn-sm btn-warning me-1" @onclick="(() => EditReservation(context))">Edit</button>
+                @if (context.Status == ReservationStatusModel.Pending)
+                {
+                    <button type="button" class="btn btn-sm btn-success me-1" @onclick="(() => ConfirmReservation(context))">Confirm</button>
+                }
+                <button type="button" class="btn btn-sm btn-danger" @onclick="(() => DeleteReservation(context.ReservationId))">Delete</button>
+            </td>
+        </Row>
+    </Pager>
+}
+
+@code {
+    [Parameter]
+    public int ResourceId { get; set; }
+
+    [Parameter]
+    public int ModuleId { get; set; }
+
+    private readonly List<ReservationModel> _reservations = new();
+    private int _editingReservationId;
+    private int _reservationUserId;
+    private DateTime _reservationStartTime = DateTime.Now.AddHours(1);
+    private DateTime _reservationEndTime = DateTime.Now.AddHours(2);
+    private ReservationStatusModel _reservationStatus = ReservationStatusModel.Pending;
+    private string _reservationNotes;
+    private string _message;
+    private string _messageType = "warning";
+    private string _defaultStatus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var settings = await SettingService.GetModuleSettingsAsync(ModuleId);
+        _defaultStatus = SettingService.GetSetting(settings, "StatusDefault", "Pending");
+        await LoadReservationsAsync();
+    }
+
+    private async Task LoadReservationsAsync()
+    {
+        _reservations.Clear();
+        var reservations = await ClientReservationService.GetReservationsAsync(ResourceId, ModuleId);
+        if (reservations != null)
+        {
+            _reservations.AddRange(reservations);
+        }
+    }
+
+    private async Task SaveReservation()
+    {
+        try
+        {
+            ClearMessage();
+
+            if (_reservationUserId <= 0)
+            {
+                SetWarning("User Id must be greater than zero.");
+                return;
+            }
+
+            var reservation = new ReservationModel
+            {
+                ReservationId = _editingReservationId,
+                ResourceId = ResourceId,
+                UserId = _reservationUserId,
+                StartTime = _reservationStartTime,
+                EndTime = _reservationEndTime,
+                Status = _editingReservationId == 0 
+                    ? (Enum.TryParse<ReservationStatusModel>(_defaultStatus, out var defaultStatus) ? defaultStatus : ReservationStatusModel.Pending)
+                    : _reservationStatus,
+                Notes = _reservationNotes
+            };
+
+            ReservationModel result = _editingReservationId == 0
+                ? await ClientReservationService.AddReservationAsync(reservation, ModuleId)
+                : await ClientReservationService.UpdateReservationAsync(reservation, ModuleId);
+
+            if (result == null)
+            {
+                SetWarning("Reservation validation failed (check time range, overlap, and availability policy).");
+                return;
+            }
+
+            ClearReservationEdit();
+            await LoadReservationsAsync();
+        }
+        catch
+        {
+            SetError("Error saving reservation.");
+        }
+    }
+
+    private async Task DeleteReservation(int reservationId)
+    {
+        try
+        {
+            ClearMessage();
+            await ClientReservationService.DeleteReservationAsync(reservationId, ModuleId);
+            await LoadReservationsAsync();
+        }
+        catch
+        {
+            SetError("Error deleting reservation.");
+        }
+    }
+
+    private async Task ConfirmReservation(ReservationModel reservation)
+    {
+        try
+        {
+            ClearMessage();
+            reservation.Status = ReservationStatusModel.Confirmed;
+            await ClientReservationService.UpdateReservationAsync(reservation, ModuleId);
+            await LoadReservationsAsync();
+        }
+        catch
+        {
+            SetError("Error confirming reservation.");
+        }
+    }
+
+    private void EditReservation(ReservationModel reservation)
+    {
+        ClearMessage();
+        _editingReservationId = reservation.ReservationId;
+        _reservationUserId = reservation.UserId;
+        _reservationStartTime = reservation.StartTime;
+        _reservationEndTime = reservation.EndTime;
+        _reservationStatus = reservation.Status;
+        _reservationNotes = reservation.Notes;
+    }
+
+    private void ClearReservationEdit()
+    {
+        _editingReservationId = 0;
+        _reservationUserId = 0;
+        _reservationStartTime = DateTime.Now.AddHours(1);
+        _reservationEndTime = DateTime.Now.AddHours(2);
+        _reservationStatus = string.IsNullOrEmpty(_defaultStatus) ? ReservationStatusModel.Pending : Enum.Parse<ReservationStatusModel>(_defaultStatus);
+        _reservationNotes = string.Empty;
+    }
+
+    private void SetWarning(string message)
+    {
+        _message = message;
+        _messageType = "warning";
+    }
+
+    private void SetError(string message)
+    {
+        _message = message;
+        _messageType = "danger";
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}
