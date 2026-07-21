@@ -45,13 +45,19 @@ else
                                 @foreach (var availability in _selectedDateAvailabilities)
                                 {
                                     var isBooked = IsAvailabilityBooked(availability);
-                                    <li class="list-group-item d-flex justify-content-between align-items-center @(isBooked ? "" : "")" 
-                                        style="cursor: @(isBooked ? "not-allowed" : "pointer");"
-                                        @onclick="@(isBooked ? null : () => SelectAvailability(availability))">
-                                        <span class="@(isBooked ? "text-muted" : "")">
+                                    var isPast = IsAvailabilityInPast(availability);
+                                    var isDisabled = isBooked || isPast;
+                                    <li class="list-group-item d-flex justify-content-between align-items-center @(isDisabled ? "" : "")" 
+                                        style="cursor: @(isDisabled ? "not-allowed" : "pointer");"
+                                        @onclick="@(isDisabled ? null : () => SelectAvailability(availability))">
+                                        <span class="@(isDisabled ? "text-muted" : "")">
                                             @DateTime.Today.Add(availability.StartTime).ToString("h:mm tt") - @DateTime.Today.Add(availability.EndTime).ToString("h:mm tt")
                                         </span>
-                                        @if (isBooked)
+                                        @if (isPast)
+                                        {
+                                            <span class="badge bg-secondary">Past</span>
+                                        }
+                                        else if (isBooked)
                                         {
                                             <span class="badge bg-primary">Booked</span>
                                         }
@@ -84,6 +90,14 @@ else
                     <textarea id="notes" class="form-control" @bind="@_notes"></textarea>
                 </div>
 
+                @if (!string.IsNullOrWhiteSpace(_cancellationPolicy))
+                {
+                    <div class="alert alert-info mb-3">
+                        <h6 class="alert-heading">Cancellation Policy</h6>
+                        <p class="mb-0 small">@_cancellationPolicy</p>
+                    </div>
+                }
+
                 <button type="button" class="btn btn-primary me-2" @onclick="SaveReservation">Reserve</button>
                 <NavLink class="btn btn-secondary" href="@NavigateUrl()">Cancel</NavLink>
             </form>
@@ -115,6 +129,7 @@ else
     private string _notes;
     private bool _showAvailabilities = false;
     private string _defaultStatus;
+    private string _cancellationPolicy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -122,6 +137,7 @@ else
         {
             var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
             _defaultStatus = SettingService.GetSetting(settings, "StatusDefault", "Pending");
+            _cancellationPolicy = SettingService.GetSetting(settings, "CancellationPolicy", "");
             _resourceId = int.Parse(PageState.QueryString["id"]);
             var queryDateValue = GetQueryValue("date");
             if (!string.IsNullOrEmpty(queryDateValue) && DateTime.TryParse(queryDateValue, out var parsedDate))
@@ -147,9 +163,28 @@ else
 
             if (_selectedDateAvailabilities.Count > 0)
             {
-                var first = _selectedDateAvailabilities.First();
-                _startTime = _selectedDate.Date + first.StartTime;
-                _endTime = _selectedDate.Date + first.EndTime;
+                // Find the first available slot that is not booked and not in the past
+                var firstAvailable = _selectedDateAvailabilities.FirstOrDefault(a => 
+                {
+                    var slotStart = _selectedDate.Date + a.StartTime;
+                    var slotEnd = _selectedDate.Date + a.EndTime;
+                    var isNotPast = slotStart >= DateTime.Now;
+                    var isNotBooked = !_selectedDateReservations.Any(r => r.StartTime < slotEnd && r.EndTime > slotStart);
+                    return isNotPast && isNotBooked;
+                });
+
+                if (firstAvailable != null)
+                {
+                    _startTime = _selectedDate.Date + firstAvailable.StartTime;
+                    _endTime = _selectedDate.Date + firstAvailable.EndTime;
+                }
+                else
+                {
+                    // Fallback to first slot if no available slots found
+                    var first = _selectedDateAvailabilities.First();
+                    _startTime = _selectedDate.Date + first.StartTime;
+                    _endTime = _selectedDate.Date + first.EndTime;
+                }
             }
             else
             {
@@ -231,6 +266,12 @@ else
         return _selectedDateReservations.Any(item => item.StartTime < slotEnd && item.EndTime > slotStart);
     }
 
+    private bool IsAvailabilityInPast(AvailabilityModel availability)
+    {
+        var slotStart = _selectedDate.Date + availability.StartTime;
+        return slotStart < DateTime.Now;
+    }
+
     private void SelectAvailability(AvailabilityModel availability)
     {
         _startTime = _selectedDate.Date + availability.StartTime;
@@ -252,6 +293,13 @@ else
             if (PageState.User == null || PageState.User.UserId <= 0)
             {
                 AddModuleMessage("You must be signed in to reserve a resource.", MessageType.Warning);
+                return;
+            }
+
+            // Check if the selected time is in the past
+            if (_startTime < DateTime.Now)
+            {
+                AddModuleMessage("You cannot reserve a time slot that has already passed.", MessageType.Warning);
                 return;
             }
 

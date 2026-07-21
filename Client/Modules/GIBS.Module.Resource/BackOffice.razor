@@ -4,13 +4,14 @@
 @namespace GIBS.Module.Resource
 @inherits ModuleBase
 @inject IResourceService ClientResourceService
+@inject IReservationService ClientReservationService
 @inject NavigationManager NavigationManager
 
 <div class="mb-3 d-flex justify-content-between">
     <NavLink class="btn btn-outline-secondary" href="@NavigateUrl()">Back to Calendar</NavLink>
 
     <div>
-        <ActionLink Action="PrintSchedule" Security="SecurityAccessLevel.Edit" Text="Print Schedule" IconName="oi oi-print" Class="me-2" />
+        <ActionLink Action="PrintSchedule" Security="SecurityAccessLevel.Edit" Text="Print Schedule" IconName="oi oi-print" Class="btn btn-outline-secondary" />
         <ActionLink Action="ManageAllReservations" Security="SecurityAccessLevel.View" Text="Manage All Reservations" />
     </div>
 </div>
@@ -51,6 +52,41 @@ else
                 <div class="card-body">
                     <h6 class="card-subtitle mb-2 text-muted">Active Capacity</h6>
                     <h3 class="mb-0">@ActiveCapacity</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Reservations</h6>
+                    <h3 class="mb-0">@TotalReservations</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Last 7 Days</h6>
+                    <h3 class="mb-0 text-info">@Last7DaysReservations</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Last 30 Days</h6>
+                    <h3 class="mb-0 text-primary">@Last30DaysReservations</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Year to Date</h6>
+                    <h3 class="mb-0 text-success">@YearToDateReservations</h3>
                 </div>
             </div>
         </div>
@@ -111,17 +147,37 @@ else
     };
 
     List<ResourceModel> _Resources;
+    List<Models.Reservation> _AllReservations;
 
     private int TotalResources => _Resources?.Count ?? 0;
     private int ActiveResources => _Resources?.Count(item => item.IsActive) ?? 0;
     private int InactiveResources => TotalResources - ActiveResources;
     private int ActiveCapacity => _Resources?.Where(item => item.IsActive).Sum(item => item.MaxCapacity) ?? 0;
 
+    private int TotalReservations => _AllReservations?.Count ?? 0;
+    private int Last7DaysReservations => _AllReservations?.Count(r => r.StartTime >= DateTime.Now.AddDays(-7)) ?? 0;
+    private int Last30DaysReservations => _AllReservations?.Count(r => r.StartTime >= DateTime.Now.AddDays(-30)) ?? 0;
+    private int YearToDateReservations => _AllReservations?.Count(r => r.StartTime >= new DateTime(DateTime.Now.Year, 1, 1)) ?? 0;
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _Resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
+
+            // Load all reservations for statistics
+            _AllReservations = new List<Models.Reservation>();
+            if (_Resources != null)
+            {
+                foreach (var resource in _Resources)
+                {
+                    var reservations = await ClientReservationService.GetReservationsAsync(resource.ResourceId, ModuleState.ModuleId);
+                    if (reservations != null)
+                    {
+                        _AllReservations.AddRange(reservations);
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {

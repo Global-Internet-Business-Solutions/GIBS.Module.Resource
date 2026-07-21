@@ -24,6 +24,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.9" />
+    <PackageReference Include="QuestPDF" Version="2026.7.1" PrivateAssets="none" />
     <PackageReference Include="Twilio" Version="7.13.1" PrivateAssets="none" />
   </ItemGroup>
 

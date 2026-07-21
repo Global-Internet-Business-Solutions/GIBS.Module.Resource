@@ -23,6 +23,11 @@ namespace GIBS.Module.Resource.Startup
             {
                 services.AddScoped<IResourceAvailabilityService, ClientResourceAvailabilityService>();
             }
+
+            if (!services.Any(s => s.ServiceType == typeof(ISchedulePdfClientService)))
+            {
+                services.AddScoped<ISchedulePdfClientService, SchedulePdfClientService>();
+            }
         }
     }
 }

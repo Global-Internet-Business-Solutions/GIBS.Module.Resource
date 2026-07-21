@@ -15,7 +15,13 @@
 
 
 
-@if (_Reservations == null)
+@if (PageState.User == null)
+{
+    <div class="alert alert-warning">
+        <p>You must be logged in to view your bookings.</p>
+    </div>
+}
+else if (_Reservations == null)
 {
     <p><em>Loading...</em></p>
 }
@@ -138,6 +144,13 @@ else
     {
         try
         {
+            // Check if user is logged in
+            if (PageState.User == null || PageState.User.UserId == -1)
+            {
+                _Reservations = new List<ReservationModel>();
+                return;
+            }
+
             var reservations = new List<ReservationModel>();
             var resources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
 

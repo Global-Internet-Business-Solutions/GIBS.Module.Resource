@@ -25,6 +25,7 @@ namespace GIBS.Module.Resource.Startup
             services.AddTransient<IReservationService, ServerReservationService>();
             services.AddTransient<IResourceAvailabilityService, ServerResourceAvailabilityService>();
             services.AddTransient<ITwilioSmsService, TwilioSmsService>();
+            services.AddTransient<ISchedulePdfService, SchedulePdfService>();
 
             services.AddTransient<IResourceRepository, ResourceRepository>();
             services.AddTransient<IReservationRepository, ReservationRepository>();

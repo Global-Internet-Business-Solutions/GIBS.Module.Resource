@@ -6,6 +6,7 @@
 @inherits ModuleBase
 @inject IResourceService ClientResourceService
 @inject IResourceAvailabilityService ClientResourceAvailabilityService
+@inject ISettingService SettingService
 @inject NavigationManager NavigationManager
 
 <div class="mb-3">
@@ -55,6 +56,14 @@ else
                         <label class="fw-bold">Buffer Times:</label>
                         <p>Before: @_resource.BufferBeforeMinutes minutes | After: @_resource.BufferAfterMinutes minutes</p>
                     </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_cancellationPolicy))
+                    {
+                        <div class="mb-3">
+                            <label class="fw-bold">Cancellation Policy:</label>
+                            <p class="text-muted small">@_cancellationPolicy</p>
+                        </div>
+                    }
                 </div>
 
                 <div class="col-md-6">
@@ -114,6 +123,7 @@ else
     private ResourceModel _resource;
     private List<AvailabilityModel> _availabilities;
     private int _resourceId;
+    private string _cancellationPolicy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -123,6 +133,10 @@ else
             {
                 _resource = await ClientResourceService.GetResourceAsync(_resourceId, ModuleState.ModuleId);
                 _availabilities = await ClientResourceAvailabilityService.GetAvailabilitiesAsync(_resourceId, ModuleState.ModuleId);
+
+                // Load module settings for cancellation policy
+                Dictionary<string, string> settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+                _cancellationPolicy = SettingService.GetSetting(settings, "CancellationPolicy", "");
             }
             else
             {

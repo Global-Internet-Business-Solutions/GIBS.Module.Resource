@@ -10,3 +10,13 @@ cp -f "../Server/bin/Debug/$TargetFramework/$ProjectName$.Server.Oqtane.pdb" "..
 cp -f "../Shared/bin/Debug/$TargetFramework/$ProjectName$.Shared.Oqtane.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
 cp -f "../Shared/bin/Debug/$TargetFramework/$ProjectName$.Shared.Oqtane.pdb" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
 cp -rf "../Server/wwwroot/"* "../../oqtane.framework/Oqtane.Server/wwwroot/_content/%ProjectName%/"
+
+# Copy Twilio dependencies
+cp -f "../Server/bin/Debug/$TargetFramework/Twilio.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+[ -f "../Server/bin/Debug/$TargetFramework/Twilio.pdb" ] && cp -f "../Server/bin/Debug/$TargetFramework/Twilio.pdb" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+
+# Copy QuestPDF dependencies
+cp -f "../Server/bin/Debug/$TargetFramework/QuestPDF.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+[ -f "../Server/bin/Debug/$TargetFramework/QuestPDF.pdb" ] && cp -f "../Server/bin/Debug/$TargetFramework/QuestPDF.pdb" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+# Copy QuestPDF native dependencies (runtimes folder)
+[ -d "../Server/bin/Debug/$TargetFramework/runtimes" ] && cp -rf "../Server/bin/Debug/$TargetFramework/runtimes" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"

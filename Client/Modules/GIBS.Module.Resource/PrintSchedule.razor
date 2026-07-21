@@ -7,12 +7,13 @@
 @inherits ModuleBase
 @inject IResourceService ClientResourceService
 @inject IReservationService ClientReservationService
+@inject ISchedulePdfClientService SchedulePdfClientService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
 <div class="mb-3 d-flex justify-content-between no-print">
     <h5 class="mb-0">Print Schedule</h5>
-    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl(ModuleState.ModuleId, "BackOffice")">Back to Office</NavLink>
+    <NavLink class="btn btn-outline-secondary" href="@NavigateUrl(ModuleState.ModuleId, "BackOffice")">Return to BackOffice</NavLink>
 </div>
 
 <div class="no-print">
@@ -84,9 +85,21 @@
                 }
             </div>
 
-            <div class="d-flex justify-content-end">
-                <button class="btn btn-primary" @onclick="OnPrintSchedule">
-                    <i class="oi oi-print"></i> Print Schedule
+            <div class="d-flex justify-content-end gap-2">
+                <button class="btn btn-primary" @onclick="OnGeneratePdf" disabled="@_isGeneratingPdf">
+                    @if (_isGeneratingPdf)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Generating PDF...</span>
+                    }
+                    else
+                    {
+                        <i class="oi oi-document"></i>
+                        <span> Generate PDF</span>
+                    }
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="OnPrintSchedule">
+                    <i class="oi oi-print"></i> Browser Print
                 </button>
             </div>
         </div>
@@ -138,11 +151,19 @@ else if (_reservations != null)
 
     public override string Title => "Print Schedule";
 
+    // public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
+    // {
+    //     new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
+    //     new Script("_content/GIBS.Module.Resource/Module.js")
+    // };
+
     public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
     {
-        new Stylesheet("_content/GIBS.Module.Resource/Module.css"),
-        new Script("_content/GIBS.Module.Resource/Module.js")
+        new Oqtane.Models.Resource { ResourceType = ResourceType.Stylesheet, Url = "_content/GIBS.Module.Resource/Module.css?v=1.0.0" },
+        new Oqtane.Models.Resource { ResourceType = ResourceType.Script, Level = ResourceLevel.Site, Url = "_content/GIBS.Module.Resource/Module.js?v=1.0" }
+
     };
+
 
     private List<ResourceModel> _resources;
     private List<ReservationModel> _reservations;
@@ -151,6 +172,7 @@ else if (_reservations != null)
     private DateTime _weekStartDate = GetMonday(DateTime.Today);
     private int _selectedResourceId = 0;
     private bool _isLoading = false;
+    private bool _isGeneratingPdf = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -421,6 +443,58 @@ else if (_reservations != null)
     private async Task OnPrintSchedule()
     {
         await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private async Task OnGeneratePdf()
+    {
+        try
+        {
+            _isGeneratingPdf = true;
+            StateHasChanged();
+
+            var request = new SchedulePdfRequest
+            {
+                ModuleId = ModuleState.ModuleId,
+                ViewType = _viewType,
+                SelectedDate = _selectedDate,
+                WeekStartDate = _weekStartDate,
+                ResourceId = _selectedResourceId
+            };
+
+            var pdfBytes = await SchedulePdfClientService.GenerateSchedulePdfAsync(request, ModuleState.ModuleId);
+
+            if (pdfBytes != null && pdfBytes.Length > 0)
+            {
+                var fileName = _viewType == "daily" 
+                    ? $"Schedule_{_selectedDate:yyyy-MM-dd}.pdf"
+                    : $"Schedule_Week_{_weekStartDate:yyyy-MM-dd}.pdf";
+
+                // Download the PDF using inline JavaScript to avoid caching issues
+                var base64 = Convert.ToBase64String(pdfBytes);
+                await JSRuntime.InvokeVoidAsync("eval", 
+                    $@"(function() {{
+                        const linkSource = 'data:application/pdf;base64,{base64}';
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = linkSource;
+                        downloadLink.download = '{fileName}';
+                        downloadLink.click();
+                    }})()");
+            }
+            else
+            {
+                AddModuleMessage("Error generating PDF. Please try again.", MessageType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Generating PDF {Error}", ex.Message);
+            AddModuleMessage("Error generating PDF. Please try again.", MessageType.Error);
+        }
+        finally
+        {
+            _isGeneratingPdf = false;
+            StateHasChanged();
+        }
     }
 }
 
