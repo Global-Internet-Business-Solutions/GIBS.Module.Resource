@@ -122,7 +122,7 @@ Configure Twilio integration for SMS notifications:
 | **Account SID** | Your Twilio Account SID | Yes (if enabled) |
 | **Auth Token** | Your Twilio Auth Token | Yes (if enabled) |
 | **From Phone Number** | Twilio phone number to send from | Yes (if enabled) |
-| **Message URL** | Twilio messaging service URL | Optional |
+| **Webhook URL** | URL reserved for future webhook use | Optional |
 | **Send To Number** | Default recipient phone number for SMS alerts | Yes (if enabled) |
 
 ### Email Configuration

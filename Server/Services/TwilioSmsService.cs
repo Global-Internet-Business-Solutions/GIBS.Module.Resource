@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Oqtane.Repository;
 using Twilio;
+using Twilio.Exceptions;
 using Twilio.Rest.Api.V2010.Account;
 using Twilio.Types;
 
@@ -29,17 +30,14 @@ namespace GIBS.Module.Resource.Services
         {
             try
             {
-                // Get module settings
                 var settings = _settingRepository.GetSettings(Oqtane.Shared.EntityNames.Module, moduleId).ToDictionary(s => s.SettingName, s => s.SettingValue);
 
-                // Check if Twilio is enabled
-                if (!settings.TryGetValue("EnableTwilio", out var enableTwilioValue) || !bool.Parse(enableTwilioValue))
+                if (!settings.TryGetValue("EnableTwilio", out var enableTwilioValue) || !bool.TryParse(enableTwilioValue, out var enableTwilio) || !enableTwilio)
                 {
                     _logger.LogInformation("Twilio SMS is disabled for module {ModuleId}", moduleId);
                     return false;
                 }
 
-                // Get Twilio settings
                 if (!settings.TryGetValue("TwilioAccountSid", out var accountSid) || string.IsNullOrWhiteSpace(accountSid))
                 {
                     _logger.LogWarning("TwilioAccountSid is not configured");
@@ -52,33 +50,47 @@ namespace GIBS.Module.Resource.Services
                     return false;
                 }
 
-                if (!settings.TryGetValue("TwilioPhoneNumber", out var fromPhoneNumber) || string.IsNullOrWhiteSpace(fromPhoneNumber))
-                {
-                    _logger.LogWarning("TwilioPhoneNumber is not configured");
-                    return false;
-                }
-
                 if (!settings.TryGetValue("TwilioSendToNumber", out var toPhoneNumber) || string.IsNullOrWhiteSpace(toPhoneNumber))
                 {
                     _logger.LogWarning("TwilioSendToNumber is not configured");
                     return false;
                 }
 
-                // Initialize Twilio client
+                if (!settings.TryGetValue("TwilioPhoneNumber", out var fromPhoneNumber) || string.IsNullOrWhiteSpace(fromPhoneNumber))
+                {
+                    _logger.LogWarning("TwilioPhoneNumber is not configured");
+                    return false;
+                }
+
+                accountSid = accountSid.Trim();
+                authToken = authToken.Trim();
+                fromPhoneNumber = fromPhoneNumber.Trim();
+                toPhoneNumber = toPhoneNumber.Trim();
+
                 TwilioClient.Init(accountSid, authToken);
 
-                // Build the message
                 var messageBody = BuildReservationMessage(reservation, resource, userName);
+                _logger.LogInformation("Sending Twilio SMS for reservation {ReservationId} from {FromPhoneNumber} to {ToPhoneNumber}.", reservation.ReservationId, fromPhoneNumber, toPhoneNumber);
 
-                // Send SMS
                 var message = await MessageResource.CreateAsync(
                     body: messageBody,
                     from: new PhoneNumber(fromPhoneNumber),
                     to: new PhoneNumber(toPhoneNumber)
                 );
 
+                if (message.ErrorCode.HasValue)
+                {
+                    _logger.LogWarning("Twilio API returned error for reservation {ReservationId}. SID: {MessageSid}, Status: {Status}, ErrorCode: {ErrorCode}, ErrorMessage: {ErrorMessage}", reservation.ReservationId, message.Sid, message.Status, message.ErrorCode, message.ErrorMessage);
+                    return false;
+                }
+
                 _logger.LogInformation("Twilio SMS sent successfully. SID: {MessageSid}, Status: {Status}", message.Sid, message.Status);
                 return true;
+            }
+            catch (RestException ex)
+            {
+                _logger.LogError(ex, "Twilio REST error sending SMS for reservation {ReservationId}. Status: {Status}, Code: {Code}, MoreInfo: {MoreInfo}", reservation.ReservationId, ex.Status, ex.Code, ex.MoreInfo);
+                return false;
             }
             catch (Exception ex)
             {

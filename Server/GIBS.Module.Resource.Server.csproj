@@ -3,9 +3,9 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
-    <Version>1.0.0</Version>
+    <Version>1.0.2</Version>
     <Product>GIBS.Module.Resource</Product>
-    <Authors>GIBS</Authors>
+    <Authors>Joseph M Aucoin</Authors>
     <Company>GIBS</Company>
     <Description>Resource Manager</Description>
     <Copyright>GIBS</Copyright>
@@ -20,12 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.9" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.10" />
     <PackageReference Include="QuestPDF" Version="2026.7.1" PrivateAssets="none" />
-    <PackageReference Include="Twilio" Version="7.13.1" PrivateAssets="none" />
+    <PackageReference Include="Twilio" Version="7.14.9" PrivateAssets="none" />
   </ItemGroup>
 
   <ItemGroup>

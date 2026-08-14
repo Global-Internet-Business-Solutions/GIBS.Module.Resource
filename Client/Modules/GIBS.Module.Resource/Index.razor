@@ -63,10 +63,11 @@ else
                                                 @dayAvailabilities.Count Available
                                             </button>
                                         </div>
+
                                     }
-                                    @if (dayReservations.Count > 0)
+                                    @if (_showBookingsOnCalendar && dayReservations.Any(r => r.StartTime.Date >= DateTime.Today))
                                     {
-                                        <div><span class="badge bg-primary">@dayReservations.Count Booked</span></div>
+                                        <div><span class="badge bg-primary">@dayReservations.Count(r => r.StartTime.Date >= DateTime.Today) Booked</span></div>
                                     }
                                 </td>
                             }
@@ -165,6 +166,7 @@ else
     private DateTime _selectedDate = DateTime.Today;
     private readonly string[] _dayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
     private string _customTitle = "Booking Calendar";
+    private bool _showBookingsOnCalendar = true;
 
     private List<List<DateTime>> CalendarWeeks => BuildCalendarWeeks();
 
@@ -179,7 +181,11 @@ else
     {
         try
         {
-            _customTitle = SettingService.GetSetting(ModuleState.Settings, "CustomTitle", "Booking Calendar");
+           // _customTitle = SettingService.GetSetting(ModuleState.Settings, "CustomTitle", "Booking Calendar");
+              var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+        _customTitle = SettingService.GetSetting(settings, "CustomTitle", "Booking Calendar");
+        _showBookingsOnCalendar = bool.Parse(SettingService.GetSetting(settings, "ShowBookingsOnCalendar", "true"));
+
             // Check for day querystring parameter
             var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
             var query = System.Web.HttpUtility.ParseQueryString(uri.Query);

@@ -24,7 +24,7 @@ namespace GIBS.Module.Resource.Repository
             base.OnModelCreating(builder);
 
             builder.Entity<Models.Resource>().ToTable(ActiveDatabase.RewriteName("GIBSResource"));
-            builder.Entity<Models.Reservation>().ToTable(ActiveDatabase.RewriteName("GIBSReservation"));
+            builder.Entity<Models.Reservation>().ToTable(ActiveDatabase.RewriteName("GIBSResourceReservation"));
             builder.Entity<Models.RecurrencePattern>().ToTable(ActiveDatabase.RewriteName("GIBSRecurrencePattern"));
             builder.Entity<Models.ResourceAvailability>().ToTable(ActiveDatabase.RewriteName("GIBSResourceAvailability"));
         }

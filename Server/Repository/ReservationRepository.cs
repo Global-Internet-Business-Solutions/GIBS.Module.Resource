@@ -63,6 +63,7 @@ namespace GIBS.Module.Resource.Repository
             current.EndTime = reservation.EndTime;
             current.Status = reservation.Status;
             current.Notes = reservation.Notes;
+            current.OptIn = reservation.OptIn;
 
             db.SaveChanges();
             return current;

@@ -36,6 +36,20 @@ namespace GIBS.Module.Resource.Controllers
             return null;
         }
 
+        [HttpGet("users/{moduleid}")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<IEnumerable<Models.ReservationUserOption>> GetUsers(int moduleid)
+        {
+            if (IsAuthorizedEntityId(EntityNames.Module, moduleid))
+            {
+                return await _reservationService.GetReservationUsersAsync(moduleid);
+            }
+
+            _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized Reservation User List Attempt {ModuleId}", moduleid);
+            HttpContext.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+            return null;
+        }
+
         [HttpGet("{id}/{moduleid}")]
         [Authorize(Policy = PolicyNames.ViewModule)]
         public async Task<Models.Reservation> Get(int id, int moduleid)

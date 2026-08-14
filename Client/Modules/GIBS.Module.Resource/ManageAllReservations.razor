@@ -20,12 +20,13 @@ else
 {
     @if (_Reservations.Count != 0)
     {
-        <Pager Items="@_Reservations" PageSize="10" SearchProperties="ResourceName,UserName,Status,StartTime,EndTime" Class="table table-striped">
+        <Pager Items="@_Reservations" PageSize="10" SearchProperties="ResourceName,UserName,Status,StartTime,EndTime" Class="table table-striped" CurrentPage="@_currentPage" OnPageChange="@((int page) => { _currentPage = page.ToString(); })">
             <Header>
                 <th>Resource</th>
                 <th>User</th>
-                <th>Start Time</th>
-                <th>End Time</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Notes</th>
                 <th>Status</th>
                 <th>Actions</th>
             </Header>
@@ -34,6 +35,7 @@ else
                 <td>@(context.UserId > 0 ? context.UserName : context.UserId.ToString())</td>
                 <td>@context.StartTime.ToString("g")</td>
                 <td>@context.EndTime.ToString("g")</td>
+                <td>@context.Notes</td>
                 <td>
                     <span class="badge @GetStatusBadgeClass(context.Status)">
                         @context.Status
@@ -68,6 +70,19 @@ else
                 <div class="modal-body">
                     @if (_EditingReservation != null)
                     {
+                        <div class="mb-3">
+                            <label class="form-label">User</label>
+                            <input type="text" class="form-control" value="@GetReservationUserDisplay(_EditingReservation)" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" @bind="_EditingReservation.Status">
+                                @foreach (var status in Enum.GetValues<ReservationStatus>())
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </select>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label">Start Time</label>
                             <input type="datetime-local" class="form-control" @bind="_EditingReservation.StartTime" readonly />
@@ -109,6 +124,7 @@ else
     List<Models.Resource> _Resources;
     ReservationModel _EditingReservation;
     bool _ShowEditDialog = false;
+    string _currentPage = "1";
 
     protected override async Task OnInitializedAsync()
     {
@@ -166,6 +182,17 @@ else
         };
     }
 
+    private string GetReservationUserDisplay(ReservationModel reservation)
+    {
+        if (reservation == null)
+        {
+            return string.Empty;
+        }
+
+        var userName = string.IsNullOrWhiteSpace(reservation.UserName) ? "Unknown" : reservation.UserName;
+        return $"{userName} (UserId: {reservation.UserId})";
+    }
+
     private void EditReservation(ReservationModel reservation)
     {
         _EditingReservation = new ReservationModel
@@ -173,10 +200,12 @@ else
             ReservationId = reservation.ReservationId,
             ResourceId = reservation.ResourceId,
             UserId = reservation.UserId,
+            UserName = reservation.UserName,
             StartTime = reservation.StartTime,
             EndTime = reservation.EndTime,
             Status = reservation.Status,
-            Notes = reservation.Notes
+            Notes = reservation.Notes,
+            OptIn = reservation.OptIn
         };
         _ShowEditDialog = true;
     }
@@ -214,7 +243,13 @@ else
             reservation.Status = ReservationStatus.Confirmed;
             await ClientReservationService.UpdateReservationAsync(reservation, ModuleState.ModuleId);
             await logger.LogInformation("Reservation Confirmed {Reservation}", reservation);
-            await LoadReservationsAsync();
+
+            var existingReservation = _Reservations?.FirstOrDefault(r => r.ReservationId == reservation.ReservationId);
+            if (existingReservation != null)
+            {
+                existingReservation.Status = ReservationStatus.Confirmed;
+            }
+
             StateHasChanged();
         }
         catch (Exception ex)

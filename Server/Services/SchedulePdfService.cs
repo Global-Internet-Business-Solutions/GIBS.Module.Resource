@@ -98,7 +98,7 @@ namespace GIBS.Module.Resource.Services
                     row.RelativeItem().Column(col =>
                     {
                         col.Item().Text($"Date: {date:dddd, MMMM dd, yyyy}").FontSize(14).Bold();
-                        col.Item().Text($"Resource: {resourceName}").FontSize(12).FontColor(Colors.Grey.Darken2);
+                        col.Item().Text($"Resource: {resourceName}").FontSize(13).Bold().FontColor(Colors.Grey.Darken2);
                     });
                     row.ConstantItem(150).AlignRight().Text($"Generated: {DateTime.Now:g}").FontSize(8).FontColor(Colors.Grey.Medium);
                 });

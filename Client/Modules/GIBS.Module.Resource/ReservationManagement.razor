@@ -16,8 +16,14 @@
 <div class="container mb-2">
     <div class="row mb-1">
         <div class="col-md-3">
-            <label>User Id</label>
-            <input type="number" class="form-control" min="1" @bind="@_reservationUserId" />
+            <label>User</label>
+            <select class="form-select" @bind="@_reservationUserId">
+                <option value="0">-- Select User --</option>
+                @foreach (var user in _reservationUsers)
+                {
+                    <option value="@user.UserId">@user.DisplayName (@user.UserId)</option>
+                }
+            </select>
         </div>
         <div class="col-md-3">
             <label>Start</label>
@@ -90,6 +96,7 @@
     public int ModuleId { get; set; }
 
     private readonly List<ReservationModel> _reservations = new();
+    private readonly List<Models.ReservationUserOption> _reservationUsers = new();
     private int _editingReservationId;
     private int _reservationUserId;
     private DateTime _reservationStartTime = DateTime.Now.AddHours(1);
@@ -104,7 +111,33 @@
     {
         var settings = await SettingService.GetModuleSettingsAsync(ModuleId);
         _defaultStatus = SettingService.GetSetting(settings, "StatusDefault", "Pending");
+        await LoadUsersAsync();
         await LoadReservationsAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        try
+        {
+            _reservationUsers.Clear();
+            var users = await ClientReservationService.GetReservationUsersAsync(ModuleId);
+            if (users != null)
+            {
+                _reservationUsers.AddRange(users);
+                if (_reservationUsers.Count == 0)
+                {
+                    SetWarning($"No users available for this site. Check server logs for details. ModuleId: {ModuleId}");
+                }
+            }
+            else
+            {
+                SetWarning($"Failed to load users. API returned null for ModuleId: {ModuleId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            SetError($"Error loading users: {ex.Message} - {ex.InnerException?.Message}");
+        }
     }
 
     private async Task LoadReservationsAsync()
@@ -125,7 +158,7 @@
 
             if (_reservationUserId <= 0)
             {
-                SetWarning("User Id must be greater than zero.");
+                SetWarning("Please select a user.");
                 return;
             }
 
@@ -139,7 +172,10 @@
                 Status = _editingReservationId == 0 
                     ? (Enum.TryParse<ReservationStatusModel>(_defaultStatus, out var defaultStatus) ? defaultStatus : ReservationStatusModel.Pending)
                     : _reservationStatus,
-                Notes = _reservationNotes
+                Notes = _reservationNotes,
+                OptIn = _editingReservationId == 0
+                    ? false
+                    : _reservations.FirstOrDefault(item => item.ReservationId == _editingReservationId)?.OptIn ?? false
             };
 
             ReservationModel result = _editingReservationId == 0

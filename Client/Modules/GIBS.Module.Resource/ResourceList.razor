@@ -5,6 +5,7 @@
 @inherits ModuleBase
 @inject IResourceService ClientResourceService
 @inject NavigationManager NavigationManager
+@inject ISettingService SettingService
 
 <div class="mb-3 d-flex justify-content-between">
     <h4 class="mb-3">Resources</h4>
@@ -68,7 +69,19 @@ else
                 </div>
             }
         </div>
+       
     }
+
+     <div class="row mb-4"><hr />
+        @if (!string.IsNullOrWhiteSpace(_cancellationPolicy))
+        {
+            <div class="col">
+                <h6>Cancellation Policy</h6>
+                <p class="small">@_cancellationPolicy</p>
+            </div>
+        }
+        </div>
+
 }
 
 @code {
@@ -78,6 +91,7 @@ else
     public override string Actions => "ResourceList";
 
     public override string Title => "Resources";
+    private string _cancellationPolicy;
 
     public override List<Oqtane.Models.Resource> Resources => new List<Oqtane.Models.Resource>()
     {
@@ -91,6 +105,9 @@ else
     {
         try
         {
+           _cancellationPolicy = SettingService.GetSetting(ModuleState.Settings, "CancellationPolicy", "");
+           //SettingService.GetSetting(ModuleState.Settings, "CancellationPolicy", "Default cancellation policy text.");
+            
             var allResources = await ClientResourceService.GetResourcesAsync(ModuleState.ModuleId);
             // Filter to show only active resources
             _resources = allResources?.Where(r => r.IsActive).ToList() ?? new List<ResourceModel>();

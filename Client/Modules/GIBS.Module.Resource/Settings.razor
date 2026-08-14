@@ -42,6 +42,16 @@
         </div>
     </div>
 
+    <div class="row mb-3 align-items-center">
+        <Label Class="col-sm-3" For="showBookingsOnCalendar" HelpText="Display bookings on the calendar view" ResourceKey="ShowBookingsOnCalendar" ResourceType="@resourceType">Show Bookings On Calendar: </Label>
+        <div class="col-sm-9">
+            <div class="form-check">
+                <input id="showBookingsOnCalendar" type="checkbox" class="form-check-input" @bind="@_showBookingsOnCalendar" />
+                <label class="form-check-label" for="showBookingsOnCalendar">Display booking badges on calendar view</label>
+            </div>
+        </div>
+    </div>
+
     <div class="row mb-4">
         <div class="col">
             <hr />
@@ -83,9 +93,9 @@
         </div>
 
         <div class="row mb-3 align-items-center">
-            <Label Class="col-sm-3" For="twilioMessageURL" HelpText="Twilio Messaging Service URL" ResourceKey="TwilioMessageURL" ResourceType="@resourceType">Message URL: </Label>
+            <Label Class="col-sm-3" For="twilioWebhookUrl" HelpText="Webhook URL for future use" ResourceKey="TwilioWebhookUrl" ResourceType="@resourceType">Webhook URL: </Label>
             <div class="col-sm-9">
-                <input id="twilioMessageURL" type="url" class="form-control" @bind="@_twilioMessageURL" placeholder="https://api.twilio.com/..." />
+                <input id="twilioWebhookUrl" type="url" class="form-control" @bind="@_twilioWebhookUrl" placeholder="https://example.com/webhook" />
             </div>
         </div>
 
@@ -106,11 +116,12 @@
     private string _statusDefault;
     private string _cancellationPolicy;
     private string _emailNotification;
+    private bool _showBookingsOnCalendar;
     private bool _enableTwilio;
     private string _twilioAccountSid;
     private string _twilioAuthToken;
     private string _twilioPhoneNumber;
-    private string _twilioMessageURL;
+    private string _twilioWebhookUrl;
     private string _twilioSendToNumber;
 
     protected override async Task OnInitializedAsync()
@@ -124,11 +135,12 @@
             _cancellationPolicy = SettingService.GetSetting(settings, "CancellationPolicy", 
                 "This Resource Booking Cancellation Policy requires all cancellations or modifications to be submitted at least 24 hours prior to the scheduled reservation time to receive a full credit or avoid penalty fees. Cancellations made within this 24-hour window, as well as failure to arrive within 15 minutes of the start time, will result in a 100% forfeiture of the booking fee or a late-cancellation charge. Exceptions are made solely at the discretion of management for documented emergencies or verified facility closures due to severe inclement weather or technical outages.");
             _emailNotification = SettingService.GetSetting(settings, "EmailNotification", "");
+            _showBookingsOnCalendar = bool.Parse(SettingService.GetSetting(settings, "ShowBookingsOnCalendar", "true"));
             _enableTwilio = bool.Parse(SettingService.GetSetting(settings, "EnableTwilio", "false"));
             _twilioAccountSid = SettingService.GetSetting(settings, "TwilioAccountSid", "");
             _twilioAuthToken = SettingService.GetSetting(settings, "TwilioAuthToken", "");
             _twilioPhoneNumber = SettingService.GetSetting(settings, "TwilioPhoneNumber", "");
-            _twilioMessageURL = SettingService.GetSetting(settings, "TwilioMessageURL", "");
+            _twilioWebhookUrl = SettingService.GetSetting(settings, "TwilioWebhookUrl", SettingService.GetSetting(settings, "TwilioMessageURL", ""));
             _twilioSendToNumber = SettingService.GetSetting(settings, "TwilioSendToNumber", "");
         }
         catch (Exception ex)
@@ -147,11 +159,12 @@
             settings = SettingService.SetSetting(settings, "StatusDefault", _statusDefault);
             settings = SettingService.SetSetting(settings, "CancellationPolicy", _cancellationPolicy);
             settings = SettingService.SetSetting(settings, "EmailNotification", _emailNotification);
+            settings = SettingService.SetSetting(settings, "ShowBookingsOnCalendar", _showBookingsOnCalendar.ToString());
             settings = SettingService.SetSetting(settings, "EnableTwilio", _enableTwilio.ToString());
             settings = SettingService.SetSetting(settings, "TwilioAccountSid", _twilioAccountSid);
             settings = SettingService.SetSetting(settings, "TwilioAuthToken", _twilioAuthToken);
             settings = SettingService.SetSetting(settings, "TwilioPhoneNumber", _twilioPhoneNumber);
-            settings = SettingService.SetSetting(settings, "TwilioMessageURL", _twilioMessageURL);
+            settings = SettingService.SetSetting(settings, "TwilioWebhookUrl", _twilioWebhookUrl);
             settings = SettingService.SetSetting(settings, "TwilioSendToNumber", _twilioSendToNumber);
 
             await SettingService.UpdateModuleSettingsAsync(settings, ModuleState.ModuleId);

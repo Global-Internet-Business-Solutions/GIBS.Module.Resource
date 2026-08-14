@@ -12,6 +12,8 @@
 @inject IResourceAvailabilityService ClientResourceAvailabilityService
 @inject NavigationManager NavigationManager
 @inject ISettingService SettingService
+@inject IUserService UserService
+@inject IProfileService ProfileService
 
 @if (_resource == null)
 {
@@ -76,19 +78,39 @@ else
             <form @ref="form" class="@(validated ? " was-validated" : "needs-validation" )" novalidate>
                 <div class="row mb-2">
                     <div class="col-md-6">
-                        <Label Class="form-label" For="startTime">Start</Label>
+                        <Label Class="form-label fw-bold" For="startTime">Start</Label>
                         <input id="startTime" type="datetime-local" class="form-control" @bind-value="@_startTime" @bind-value:format="yyyy-MM-ddTHH:mm" required readonly />
                     </div>
                     <div class="col-md-6">
-                        <Label Class="form-label" For="endTime">End</Label>
+                        <Label Class="form-label fw-bold" For="endTime">End</Label>
                         <input id="endTime" type="datetime-local" class="form-control" @bind-value="@_endTime" @bind-value:format="yyyy-MM-ddTHH:mm" required readonly />
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <Label Class="form-label" For="notes">Notes</Label>
+                    <Label Class="form-label fw-bold" For="notes">Notes</Label>
                     <textarea id="notes" class="form-control" @bind="@_notes"></textarea>
                 </div>
+
+                <div class="mb-3">
+                    <Label Class="form-label fw-bold d-block">Subscribe</Label>
+                    <div class="d-flex align-items-start gap-2">
+                        <label class="fw-bold mb-0 flex-shrink-0" for="optIn">Opt In:</label>
+                        <input id="optIn" class="form-check-input mt-1 flex-shrink-0" type="checkbox" @bind="_optIn" />
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <label class="form-check-label mb-0" for="optIn">By checking this box and submitting your phone number, you opt in to receive recurring promotional and reservation related text messages from @PageState.Site.Name. Message frequency varies. Message and data rates may apply. Reply HELP for help or STOP to unsubscribe.
+                                View our <a href="/terms" target="_blank">Privacy Policy</a> and <a href="/terms" target="_blank">Terms of Service</a>.</label>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_optIn || !_optIn && !_hasPhoneProfileValue)
+                {
+                    <div class="mb-3">
+                        <Label Class="form-label fw-bold" For="phone">Cell Phone</Label>
+                        <input id="phone" type="text" class="form-control" @bind-value="@_phone" />
+                    </div>
+                }
 
                 @if (!string.IsNullOrWhiteSpace(_cancellationPolicy))
                 {
@@ -130,6 +152,11 @@ else
     private bool _showAvailabilities = false;
     private string _defaultStatus;
     private string _cancellationPolicy;
+    private bool _optIn = true;
+    private string _phone;
+    private bool _hasPhoneProfileValue;
+    private User _currentUser;
+    private string _phoneProfileKey = "Phone";
 
     protected override async Task OnInitializedAsync()
     {
@@ -220,6 +247,8 @@ else
             {
                 _endTime = _selectedDate.Date + endSpan;
             }
+
+            await LoadPhoneProfileAsync();
         }
         catch (Exception ex)
         {
@@ -258,6 +287,79 @@ else
         return match.Equals(default(KeyValuePair<string, string>)) ? null : match.Value;
     }
 
+    private async Task LoadPhoneProfileAsync()
+    {
+        if (PageState.User == null || PageState.User.UserId <= 0)
+        {
+            return;
+        }
+
+        var profiles = await ProfileService.GetProfilesAsync(PageState.Site.SiteId) ?? new List<Profile>();
+        var phoneProfile = profiles.FirstOrDefault(profile => string.Equals(profile.Name, "Phone", StringComparison.OrdinalIgnoreCase));
+        if (phoneProfile != null)
+        {
+            _phoneProfileKey = phoneProfile.Name;
+        }
+
+        _currentUser = await UserService.GetUserAsync(PageState.User.UserId, PageState.Site.SiteId);
+        if (_currentUser?.Settings == null)
+        {
+            return;
+        }
+
+        var existingPhoneKey = _currentUser.Settings.Keys.FirstOrDefault(key =>
+            string.Equals(key, _phoneProfileKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, "Phone", StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrEmpty(existingPhoneKey))
+        {
+            _phone = _currentUser.Settings[existingPhoneKey];
+            _hasPhoneProfileValue = !string.IsNullOrWhiteSpace(_phone);
+        }
+    }
+
+    private async Task<bool> EnsurePhoneProfileAsync()
+    {
+        if (!_optIn)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(_phone))
+        {
+            AddModuleMessage("Phone is required when Opt In is selected.", MessageType.Warning);
+            return false;
+        }
+
+        _currentUser ??= await UserService.GetUserAsync(PageState.User.UserId, PageState.Site.SiteId);
+        if (_currentUser == null)
+        {
+            AddModuleMessage("Unable to load your user profile.", MessageType.Error);
+            return false;
+        }
+
+        _currentUser.Settings ??= new Dictionary<string, string>();
+
+        var existingPhoneKey = _currentUser.Settings.Keys.FirstOrDefault(key =>
+            string.Equals(key, _phoneProfileKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, "Phone", StringComparison.OrdinalIgnoreCase));
+
+        var phoneValue = _phone.Trim();
+        var profileKeyToSave = string.IsNullOrEmpty(existingPhoneKey) ? _phoneProfileKey : existingPhoneKey;
+
+        var newSettings = new Dictionary<string, string>
+        {
+            [profileKeyToSave] = phoneValue
+        };
+
+        await SettingService.UpdateUserSettingsAsync(newSettings, PageState.User.UserId);
+
+        _currentUser.Settings[profileKeyToSave] = phoneValue;
+        _phone = phoneValue;
+        _hasPhoneProfileValue = true;
+        return true;
+    }
+
     private bool IsAvailabilityBooked(AvailabilityModel availability)
     {
         var slotStart = _selectedDate.Date + availability.StartTime;
@@ -283,12 +385,6 @@ else
         try
         {
             validated = true;
-            var interop = new Oqtane.UI.Interop(JSRuntime);
-            if (!await interop.FormValid(form))
-            {
-                AddModuleMessage("Please enter a valid time range.", MessageType.Warning);
-                return;
-            }
 
             if (PageState.User == null || PageState.User.UserId <= 0)
             {
@@ -296,10 +392,28 @@ else
                 return;
             }
 
+            if (_optIn && !_hasPhoneProfileValue && string.IsNullOrWhiteSpace(_phone))
+            {
+                AddModuleMessage("Phone is required when Opt In is selected.", MessageType.Warning);
+                return;
+            }
+
+            var interop = new Oqtane.UI.Interop(JSRuntime);
+            if (!await interop.FormValid(form))
+            {
+                AddModuleMessage("Please complete required fields and enter a valid time range.", MessageType.Warning);
+                return;
+            }
+
             // Check if the selected time is in the past
             if (_startTime < DateTime.Now)
             {
                 AddModuleMessage("You cannot reserve a time slot that has already passed.", MessageType.Warning);
+                return;
+            }
+
+            if (!await EnsurePhoneProfileAsync())
+            {
                 return;
             }
 
@@ -311,6 +425,7 @@ else
                 EndTime = _endTime,
                 Status = Enum.TryParse<ReservationStatusModel>(_defaultStatus, out var defaultStatus) ? defaultStatus : ReservationStatusModel.Pending,
                 Notes = _notes,
+                OptIn = _optIn,
                 CreatedBy = PageState.User.Username,
                 CreatedOn = DateTime.UtcNow,
                 ModifiedBy = PageState.User.Username,

@@ -5,7 +5,7 @@ using Oqtane.Models;
 
 namespace GIBS.Module.Resource.Models
 {
-    [Table("GIBSReservation")]
+    [Table("GIBSResourceReservation")]
     public class Reservation : ModelBase
     {
         [Key]
@@ -16,6 +16,7 @@ namespace GIBS.Module.Resource.Models
         public DateTime EndTime { get; set; }
         public ReservationStatus Status { get; set; }
         public string Notes { get; set; }
+        public bool OptIn { get; set; }
 
         [NotMapped]
         public string UserName { get; set; }

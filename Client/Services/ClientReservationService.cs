@@ -24,6 +24,15 @@ namespace GIBS.Module.Resource.Services
             return reservations.OrderBy(item => item.StartTime).ToList();
         }
 
+        public async Task<List<Models.ReservationUserOption>> GetReservationUsersAsync(int moduleId)
+        {
+            var users = await GetJsonAsync<List<Models.ReservationUserOption>>(
+                CreateAuthorizationPolicyUrl($"{Apiurl}/users/{moduleId}", EntityNames.Module, moduleId),
+                Enumerable.Empty<Models.ReservationUserOption>().ToList());
+
+            return users.OrderBy(item => item.DisplayName).ToList();
+        }
+
         public async Task<Models.Reservation> GetReservationAsync(int reservationId, int moduleId)
         {
             return await GetJsonAsync<Models.Reservation>(

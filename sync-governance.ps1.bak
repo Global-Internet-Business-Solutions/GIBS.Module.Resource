@@ -20,7 +20,7 @@
 .EXAMPLE
   ./sync-governance.ps1 -DryRun -Verbose
   
-  Read oqtane playbook GOVERNANCE and follow the rules. Never modily files in the oqtane.framework folder or sub-folders
+  read oqtane playbook GOVERNANCE and follow the rules
 #>
 
 [CmdletBinding()]

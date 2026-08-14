@@ -72,6 +72,52 @@ namespace GIBS.Module.Resource.Services
             return Task.FromResult(reservations);
         }
 
+        public Task<List<Models.ReservationUserOption>> GetReservationUsersAsync(int moduleId)
+        {
+            if (!IsAuthorized(moduleId, PermissionNames.Edit))
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized Reservation Users Get Attempt {ModuleId}", moduleId);
+                return null;
+            }
+
+            var allUsers = _userRepository.GetUsers().ToList();
+         //   _logger.Log(LogLevel.Information, this, LogFunction.Read, "Total users in database: {Count}", allUsers.Count);
+
+            var users = allUsers
+                .Where(user => 
+                {
+                    var isHost = user.Username == Oqtane.Shared.UserNames.Host;
+                    var isDeleted = user.IsDeleted;
+                    var isValid = !isDeleted && !isHost;
+
+                    if (!isValid)
+                    {
+                        //_logger.Log(LogLevel.Information, this, LogFunction.Read, 
+                        //    "Filtering out user '{Username}' (UserId={UserId}): IsDeleted={IsDeleted}, IsHost={IsHost}", 
+                        //    user.Username, user.UserId, isDeleted, isHost);
+                    }
+                    else
+                    {
+                        //_logger.Log(LogLevel.Information, this, LogFunction.Read, 
+                        //    "Including user '{Username}' (UserId={UserId})", 
+                        //    user.Username, user.UserId);
+                    }
+
+                    return isValid;
+                })
+                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName)
+                .Select(user => new Models.ReservationUserOption
+                {
+                    UserId = user.UserId,
+                    DisplayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName
+                })
+                .ToList();
+
+         //   _logger.Log(LogLevel.Information, this, LogFunction.Read, "Returning {Count} users", users.Count);
+
+            return Task.FromResult(users);
+        }
+
         public Task<Models.Reservation> GetReservationAsync(int reservationId, int moduleId)
         {
             if (!IsAuthorized(moduleId, PermissionNames.View))
@@ -122,27 +168,26 @@ namespace GIBS.Module.Resource.Services
             reservation = _reservationRepository.AddReservation(reservation);
             _logger.Log(LogLevel.Information, this, LogFunction.Create, "Reservation Added {Reservation}", reservation);
 
-            // Send notifications asynchronously
+            // Send notifications before returning so failures are captured reliably.
             if (reservation != null)
             {
-                _ = Task.Run(async () =>
+                try
                 {
-                    try
-                    {
-                        var user = _userRepository.GetUser(reservation.UserId);
-                        var userName = user?.DisplayName ?? user?.Username ?? "Unknown";
+                    var user = _userRepository.GetUser(reservation.UserId);
+                    var userName = user?.DisplayName ?? user?.Username ?? "Unknown";
 
-                        // Send SMS notification (if enabled)
-                        await _twilioSmsService.SendReservationNotificationAsync(reservation, resource, userName, moduleId);
-
-                        // Send email notification
-                        await SendReservationEmailAsync(reservation, resource, isNewReservation: true);
-                    }
-                    catch (Exception ex)
+                    var smsSent = await _twilioSmsService.SendReservationNotificationAsync(reservation, resource, userName, moduleId);
+                    if (!smsSent)
                     {
-                        _logger.Log(LogLevel.Error, this, LogFunction.Other, ex, "Error sending notifications for reservation {ReservationId}", reservation.ReservationId);
+                        _logger.Log(LogLevel.Information, this, LogFunction.Other, "Twilio SMS was not sent for reservation {ReservationId}.", reservation.ReservationId);
                     }
-                });
+
+                    await SendReservationEmailAsync(reservation, resource, isNewReservation: true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Other, ex, "Error sending notifications for reservation {ReservationId}", reservation.ReservationId);
+                }
             }
 
             return reservation;
