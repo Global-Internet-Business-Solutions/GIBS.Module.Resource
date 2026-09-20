@@ -1,10 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Oqtane.Repository;
 using Twilio;
-using Twilio.Exceptions;
 using Twilio.Rest.Api.V2010.Account;
 using Twilio.Types;
 
@@ -67,30 +67,29 @@ namespace GIBS.Module.Resource.Services
                 fromPhoneNumber = fromPhoneNumber.Trim();
                 toPhoneNumber = toPhoneNumber.Trim();
 
-                TwilioClient.Init(accountSid, authToken);
-
                 var messageBody = BuildReservationMessage(reservation, resource, userName);
                 _logger.LogInformation("Sending Twilio SMS for reservation {ReservationId} from {FromPhoneNumber} to {ToPhoneNumber}.", reservation.ReservationId, fromPhoneNumber, toPhoneNumber);
 
-                var message = await MessageResource.CreateAsync(
-                    body: messageBody,
-                    from: new PhoneNumber(fromPhoneNumber),
-                    to: new PhoneNumber(toPhoneNumber)
-                );
+                TwilioClient.Init(accountSid, authToken);
 
-                if (message.ErrorCode.HasValue)
+                var message = await MessageResource.CreateAsync(
+                    to: new PhoneNumber(toPhoneNumber),
+                    from: new PhoneNumber(fromPhoneNumber),
+                    body: messageBody);
+
+                var sid = message.Sid;
+                var status = message.Status?.ToString();
+                var errorCode = message.ErrorCode?.ToString();
+                var errorMessage = message.ErrorMessage;
+
+                if (!string.IsNullOrWhiteSpace(errorCode))
                 {
-                    _logger.LogWarning("Twilio API returned error for reservation {ReservationId}. SID: {MessageSid}, Status: {Status}, ErrorCode: {ErrorCode}, ErrorMessage: {ErrorMessage}", reservation.ReservationId, message.Sid, message.Status, message.ErrorCode, message.ErrorMessage);
+                    _logger.LogWarning("Twilio API returned error for reservation {ReservationId}. SID: {MessageSid}, Status: {Status}, ErrorCode: {ErrorCode}, ErrorMessage: {ErrorMessage}", reservation.ReservationId, sid, status, errorCode, errorMessage);
                     return false;
                 }
 
-                _logger.LogInformation("Twilio SMS sent successfully. SID: {MessageSid}, Status: {Status}", message.Sid, message.Status);
+                _logger.LogInformation("Twilio SMS sent successfully. SID: {MessageSid}, Status: {Status}", sid, status);
                 return true;
-            }
-            catch (RestException ex)
-            {
-                _logger.LogError(ex, "Twilio REST error sending SMS for reservation {ReservationId}. Status: {Status}, Code: {Code}, MoreInfo: {MoreInfo}", reservation.ReservationId, ex.Status, ex.Code, ex.MoreInfo);
-                return false;
             }
             catch (Exception ex)
             {

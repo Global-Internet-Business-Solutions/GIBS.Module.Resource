@@ -14,6 +14,10 @@ cp -rf "../Server/wwwroot/"* "../../oqtane.framework/Oqtane.Server/wwwroot/_cont
 # Copy Twilio dependencies
 cp -f "../Server/bin/Debug/$TargetFramework/Twilio.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
 [ -f "../Server/bin/Debug/$TargetFramework/Twilio.pdb" ] && cp -f "../Server/bin/Debug/$TargetFramework/Twilio.pdb" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+cp -f "../Server/bin/Debug/$TargetFramework/Twilio.AspNet.Common.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+[ -f "../Server/bin/Debug/$TargetFramework/Twilio.AspNet.Common.pdb" ] && cp -f "../Server/bin/Debug/$TargetFramework/Twilio.AspNet.Common.pdb" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+cp -f "../Server/bin/Debug/$TargetFramework/Twilio.AspNet.Core.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
+[ -f "../Server/bin/Debug/$TargetFramework/Twilio.AspNet.Core.pdb" ] && cp -f "../Server/bin/Debug/$TargetFramework/Twilio.AspNet.Core.pdb" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"
 
 # Copy QuestPDF dependencies
 cp -f "../Server/bin/Debug/$TargetFramework/QuestPDF.dll" "../../oqtane.framework/Oqtane.Server/bin/Debug/$TargetFramework/"

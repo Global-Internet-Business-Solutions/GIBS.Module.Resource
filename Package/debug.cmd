@@ -13,6 +13,10 @@ XCOPY "..\Server\wwwroot\*" "..\..\oqtane.framework\Oqtane.Server\wwwroot\_conte
 REM Copy Twilio dependencies
 XCOPY "..\Server\bin\Debug\%TargetFramework%\Twilio.dll" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y
 IF EXIST "..\Server\bin\Debug\%TargetFramework%\Twilio.pdb" XCOPY "..\Server\bin\Debug\%TargetFramework%\Twilio.pdb" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y
+XCOPY "..\Server\bin\Debug\%TargetFramework%\Twilio.AspNet.Common.dll" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y
+IF EXIST "..\Server\bin\Debug\%TargetFramework%\Twilio.AspNet.Common.pdb" XCOPY "..\Server\bin\Debug\%TargetFramework%\Twilio.AspNet.Common.pdb" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y
+XCOPY "..\Server\bin\Debug\%TargetFramework%\Twilio.AspNet.Core.dll" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y
+IF EXIST "..\Server\bin\Debug\%TargetFramework%\Twilio.AspNet.Core.pdb" XCOPY "..\Server\bin\Debug\%TargetFramework%\Twilio.AspNet.Core.pdb" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y
 
 REM Copy QuestPDF dependencies
 XCOPY "..\Server\bin\Debug\%TargetFramework%\QuestPDF.dll" "..\..\oqtane.framework\Oqtane.Server\bin\Debug\%TargetFramework%\" /Y

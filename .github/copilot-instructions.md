@@ -6,3 +6,6 @@
 - When adding migrations in this module, use incremented migration file naming like 01000100_<Name>.cs and increment module/package version accordingly (e.g., 1.0.1).
 - When using Oqtane Pager in this repo, preserve paging state during row actions by binding CurrentPage and OnPageChange.
 - When adjusting inline consent layouts in this repo, keep the label, checkbox, and consent text on the same row by avoiding flex-wrap and giving the consent text a flex-grow container.
+
+## Twilio Integration
+- Use the latest official Twilio NuGet package for .NET Core, such as Twilio.AspNet.Core, for consistency across modules instead of raw HTTP calls or direct Twilio.dll usage. This ensures uniformity when adding Twilio support across the user's modules.

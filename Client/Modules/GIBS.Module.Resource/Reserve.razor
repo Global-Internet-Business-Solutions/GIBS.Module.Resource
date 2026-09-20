@@ -98,8 +98,10 @@ else
                         <label class="fw-bold mb-0 flex-shrink-0" for="optIn">Opt In:</label>
                         <input id="optIn" class="form-check-input mt-1 flex-shrink-0" type="checkbox" @bind="_optIn" />
                         <div class="flex-grow-1" style="min-width: 0;">
-                            <label class="form-check-label mb-0" for="optIn">By checking this box and submitting your phone number, you opt in to receive recurring promotional and reservation related text messages from @PageState.Site.Name. Message frequency varies. Message and data rates may apply. Reply HELP for help or STOP to unsubscribe.
-                                View our <a href="/terms" target="_blank">Privacy Policy</a> and <a href="/terms" target="_blank">Terms of Service</a>.</label>
+                            <label class="form-check-label mb-0" for="optIn">
+                                By checking this box and submitting your phone number, you opt in to receive SMS text messages related to this reservation from @PageState.Site.Name. Message frequency varies. Message and data rates may apply. Reply HELP for help or STOP to unsubscribe.
+                                View our <a href="/terms" target="_blank">Privacy Policy</a> and <a href="/terms" target="_blank">Terms of Service</a>.
+                            </label>
                         </div>
                     </div>
                 </div>
