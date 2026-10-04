@@ -33,8 +33,8 @@ else
             <Row>
                 <td>@GetResourceName(context.ResourceId)</td>
                 <td>@(context.UserId > 0 ? context.UserName : context.UserId.ToString())</td>
-                <td>@context.StartTime.ToString("g")</td>
-                <td>@context.EndTime.ToString("g")</td>
+                <td>@AsLocalTime(context.StartTime).ToString("g")</td>
+                <td>@AsLocalTime(context.EndTime).ToString("g")</td>
                 <td>@context.Notes</td>
                 <td>
                     <span class="badge @GetStatusBadgeClass(context.Status)">
@@ -201,8 +201,8 @@ else
             ResourceId = reservation.ResourceId,
             UserId = reservation.UserId,
             UserName = reservation.UserName,
-            StartTime = reservation.StartTime,
-            EndTime = reservation.EndTime,
+            StartTime = AsLocalTime(reservation.StartTime),
+            EndTime = AsLocalTime(reservation.EndTime),
             Status = reservation.Status,
             Notes = reservation.Notes,
             OptIn = reservation.OptIn
@@ -222,6 +222,8 @@ else
         {
             if (_EditingReservation != null)
             {
+                _EditingReservation.StartTime = AsUtcForSave(_EditingReservation.StartTime);
+                _EditingReservation.EndTime = AsUtcForSave(_EditingReservation.EndTime);
                 await ClientReservationService.UpdateReservationAsync(_EditingReservation, ModuleState.ModuleId);
                 await logger.LogInformation("Reservation Updated {Reservation}", _EditingReservation);
                 CloseEditDialog();
@@ -241,6 +243,8 @@ else
         try
         {
             reservation.Status = ReservationStatus.Confirmed;
+            reservation.StartTime = AsUtcKind(reservation.StartTime);
+            reservation.EndTime = AsUtcKind(reservation.EndTime);
             await ClientReservationService.UpdateReservationAsync(reservation, ModuleState.ModuleId);
             await logger.LogInformation("Reservation Confirmed {Reservation}", reservation);
 
@@ -273,5 +277,33 @@ else
             await logger.LogError(ex, "Error Deleting Reservation {Error}", ex.Message);
             AddModuleMessage("Error deleting reservation.", MessageType.Error);
         }
+    }
+
+    private static DateTime AsLocalTime(DateTime value)
+    {
+        var utcValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+
+        return utcValue.ToLocalTime();
+    }
+
+    private static DateTime AsUtcForSave(DateTime value)
+    {
+        var localValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Local)
+            : value;
+
+        return localValue.ToUniversalTime();
+    }
+
+    private static DateTime AsUtcKind(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }

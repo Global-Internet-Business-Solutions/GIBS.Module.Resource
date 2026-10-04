@@ -71,10 +71,10 @@
         <Row>
             <td>@context.UserId</td>
             <td>@(context.UserId > 0 ? context.UserName : context.UserId.ToString())</td>
-            <td>@context.StartTime.ToString("g")</td>
-            <td>@context.EndTime.ToString("g")</td>
+            <td>@AsLocalTime(context.StartTime).ToString("g")</td>
+            <td>@AsLocalTime(context.EndTime).ToString("g")</td>
             <td>@context.Status</td>
-            <td>@context.CreatedOn.ToLocalTime().ToString("g")</td>
+            <td>@AsLocalTime(context.CreatedOn).ToString("g")</td>
 
             <td>
                 <button type="button" class="btn btn-sm btn-warning me-1" @onclick="(() => EditReservation(context))">Edit</button>
@@ -167,8 +167,8 @@
                 ReservationId = _editingReservationId,
                 ResourceId = ResourceId,
                 UserId = _reservationUserId,
-                StartTime = _reservationStartTime,
-                EndTime = _reservationEndTime,
+                StartTime = AsUtcForSave(_reservationStartTime),
+                EndTime = AsUtcForSave(_reservationEndTime),
                 Status = _editingReservationId == 0 
                     ? (Enum.TryParse<ReservationStatusModel>(_defaultStatus, out var defaultStatus) ? defaultStatus : ReservationStatusModel.Pending)
                     : _reservationStatus,
@@ -217,6 +217,8 @@
         {
             ClearMessage();
             reservation.Status = ReservationStatusModel.Confirmed;
+            reservation.StartTime = AsUtcKind(reservation.StartTime);
+            reservation.EndTime = AsUtcKind(reservation.EndTime);
             await ClientReservationService.UpdateReservationAsync(reservation, ModuleId);
             await LoadReservationsAsync();
         }
@@ -231,8 +233,8 @@
         ClearMessage();
         _editingReservationId = reservation.ReservationId;
         _reservationUserId = reservation.UserId;
-        _reservationStartTime = reservation.StartTime;
-        _reservationEndTime = reservation.EndTime;
+        _reservationStartTime = AsLocalTime(reservation.StartTime);
+        _reservationEndTime = AsLocalTime(reservation.EndTime);
         _reservationStatus = reservation.Status;
         _reservationNotes = reservation.Notes;
     }
@@ -262,5 +264,33 @@
     private void ClearMessage()
     {
         _message = null;
+    }
+
+    private static DateTime AsLocalTime(DateTime value)
+    {
+        var utcValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+
+        return utcValue.ToLocalTime();
+    }
+
+    private static DateTime AsUtcForSave(DateTime value)
+    {
+        var localValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Local)
+            : value;
+
+        return localValue.ToUniversalTime();
+    }
+
+    private static DateTime AsUtcKind(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }

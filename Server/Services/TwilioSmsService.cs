@@ -100,14 +100,23 @@ namespace GIBS.Module.Resource.Services
 
         private string BuildReservationMessage(Models.Reservation reservation, Models.Resource resource, string userName)
         {
-            var startTime = reservation.StartTime.ToString("g");
-            var endTime = reservation.EndTime.ToString("t");
+            var startTime = AsLocalTime(reservation.StartTime).ToString("g");
+            var endTime = AsLocalTime(reservation.EndTime).ToString("t");
 
             return $"New Reservation Booked!\n" +
                    $"Resource: {resource.Name}\n" +
                    $"User: {userName}\n" +
                    $"When: {startTime} - {endTime}\n" +
                    $"Status: {reservation.Status}";
+        }
+
+        private static DateTime AsLocalTime(DateTime value)
+        {
+            var utcValue = value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+                : value.ToUniversalTime();
+
+            return utcValue.ToLocalTime();
         }
     }
 }

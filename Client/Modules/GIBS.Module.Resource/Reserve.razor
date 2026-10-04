@@ -423,8 +423,8 @@ else
             {
                 ResourceId = _resourceId,
                 UserId = PageState.User.UserId,
-                StartTime = _startTime,
-                EndTime = _endTime,
+                StartTime = _startTime.ToUniversalTime(),
+                EndTime = _endTime.ToUniversalTime(),
                 Status = Enum.TryParse<ReservationStatusModel>(_defaultStatus, out var defaultStatus) ? defaultStatus : ReservationStatusModel.Pending,
                 Notes = _notes,
                 OptIn = _optIn,

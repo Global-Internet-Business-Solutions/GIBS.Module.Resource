@@ -40,8 +40,8 @@ else
             </Header>
             <Row>
                 <td>@GetResourceName(context.ResourceId)</td>
-                <td>@context.StartTime.ToString("g")</td>
-                <td>@context.EndTime.ToString("g")</td>
+                <td>@AsLocalTime(context.StartTime).ToString("g")</td>
+                <td>@AsLocalTime(context.EndTime).ToString("g")</td>
                 <td>
                     <span class="badge @GetStatusBadgeClass(context.Status)">
                         @context.Status
@@ -49,7 +49,7 @@ else
                 </td>
                 <td>@(string.IsNullOrWhiteSpace(context.Notes) ? "-" : context.Notes)</td>
                 <td>
-                    @if (context.Status != ReservationStatus.Cancelled && context.StartTime > DateTime.Now)
+                    @if (context.Status != ReservationStatus.Cancelled && AsLocalTime(context.StartTime) > DateTime.Now)
                     {
                         <button type="button" class="btn btn-sm btn-warning me-1" @onclick="(() => EditReservation(context))">Edit</button>
                         <button type="button" class="btn btn-sm btn-danger" @onclick="(() => CancelReservation(context.ReservationId))">Cancel</button>
@@ -199,8 +199,8 @@ else
             ReservationId = reservation.ReservationId,
             ResourceId = reservation.ResourceId,
             UserId = reservation.UserId,
-            StartTime = reservation.StartTime,
-            EndTime = reservation.EndTime,
+            StartTime = AsUtcKind(reservation.StartTime),
+            EndTime = AsUtcKind(reservation.EndTime),
             Status = reservation.Status,
             Notes = reservation.Notes,
             OptIn = reservation.OptIn
@@ -242,6 +242,8 @@ else
             if (reservation != null)
             {
                 reservation.Status = ReservationStatus.Cancelled;
+                reservation.StartTime = AsUtcKind(reservation.StartTime);
+                reservation.EndTime = AsUtcKind(reservation.EndTime);
                 await ClientReservationService.UpdateReservationAsync(reservation, ModuleState.ModuleId);
                 await logger.LogInformation("Reservation Cancelled {ReservationId}", reservationId);
                 await LoadMyReservationsAsync();
@@ -253,5 +255,24 @@ else
             await logger.LogError(ex, "Error Cancelling Reservation {Error}", ex.Message);
             AddModuleMessage("Error cancelling reservation.", MessageType.Error);
         }
+    }
+
+    private static DateTime AsLocalTime(DateTime value)
+    {
+        var utcValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+
+        return utcValue.ToLocalTime();
+    }
+
+    private static DateTime AsUtcKind(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }

@@ -217,6 +217,7 @@ else if (_reservations != null)
                         if (resourceReservations != null)
                         {
                             var dayReservations = resourceReservations
+                                .Select(NormalizeReservationToLocal)
                                 .Where(r => r.StartTime.Date == _selectedDate.Date && r.Status != ReservationStatus.Cancelled)
                                 .ToList();
                             _reservations.AddRange(dayReservations);
@@ -230,6 +231,7 @@ else if (_reservations != null)
                     if (resourceReservations != null)
                     {
                         _reservations = resourceReservations
+                            .Select(NormalizeReservationToLocal)
                             .Where(r => r.StartTime.Date == _selectedDate.Date && r.Status != ReservationStatus.Cancelled)
                             .ToList();
                     }
@@ -246,6 +248,7 @@ else if (_reservations != null)
                     if (resourceReservations != null)
                     {
                         _reservations = resourceReservations
+                            .Select(NormalizeReservationToLocal)
                             .Where(r => r.StartTime.Date >= _weekStartDate.Date &&
                                        r.StartTime.Date < weekEnd.Date &&
                                        r.Status != ReservationStatus.Cancelled)
@@ -438,6 +441,22 @@ else if (_reservations != null)
     {
         int daysFromMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
         return date.AddDays(-daysFromMonday);
+    }
+
+    private static ReservationModel NormalizeReservationToLocal(ReservationModel reservation)
+    {
+        reservation.StartTime = AsLocalTime(reservation.StartTime);
+        reservation.EndTime = AsLocalTime(reservation.EndTime);
+        return reservation;
+    }
+
+    private static DateTime AsLocalTime(DateTime value)
+    {
+        var utcValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+
+        return utcValue.ToLocalTime();
     }
 
     private async Task OnPrintSchedule()

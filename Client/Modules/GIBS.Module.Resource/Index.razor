@@ -136,7 +136,7 @@ else
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
                                             <strong>@item.ResourceName</strong><br />
-                                            <span class="text-muted">@item.StartTime.ToString("h:mm tt") - @item.EndTime.ToString("h:mm tt")</span>
+                                            <span class="text-muted">@AsLocalTime(item.StartTime).ToString("h:mm tt") - @AsLocalTime(item.EndTime).ToString("h:mm tt")</span>
                                         </div>
                                         <span class="badge @GetReservationStatusBadgeClass(item.Status)">@item.Status</span>
                                     </div>
@@ -268,7 +268,10 @@ else
                     continue;
                 }
 
-                foreach (var date in EnumerateReservationDates(reservation))
+                var localStartTime = AsLocalTime(reservation.StartTime);
+                var localEndTime = AsLocalTime(reservation.EndTime);
+
+                foreach (var date in EnumerateReservationDates(localStartTime, localEndTime))
                 {
                     if (!_reservationsByDate.TryGetValue(date, out var list))
                     {
@@ -281,8 +284,8 @@ else
                         ReservationId = reservation.ReservationId,
                         ResourceId = reservation.ResourceId,
                         ResourceName = resource.Name,
-                        StartTime = reservation.StartTime,
-                        EndTime = reservation.EndTime,
+                        StartTime = localStartTime,
+                        EndTime = localEndTime,
                         Status = reservation.Status.ToString()
                     });
                 }
@@ -290,10 +293,10 @@ else
         }
     }
 
-    private static IEnumerable<DateOnly> EnumerateReservationDates(ReservationModel reservation)
+    private static IEnumerable<DateOnly> EnumerateReservationDates(DateTime startTime, DateTime endTime)
     {
-        var current = DateOnly.FromDateTime(reservation.StartTime.Date);
-        var end = DateOnly.FromDateTime(reservation.EndTime.Date);
+        var current = DateOnly.FromDateTime(startTime.Date);
+        var end = DateOnly.FromDateTime(endTime.Date);
 
         while (current <= end)
         {
@@ -406,6 +409,15 @@ else
             "cancelled" => "bg-danger",
             _ => "bg-secondary"
         };
+    }
+
+    private static DateTime AsLocalTime(DateTime value)
+    {
+        var utcValue = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+
+        return utcValue.ToLocalTime();
     }
 
     private class ReservationDisplayItem

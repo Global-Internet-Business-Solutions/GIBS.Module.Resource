@@ -306,8 +306,8 @@ namespace GIBS.Module.Resource.Services
                 return;
             }
 
-            var startTime = reservation.StartTime.ToString("g");
-            var endTime = reservation.EndTime.ToString("t");
+            var startTime = AsLocalTime(reservation.StartTime).ToString("g");
+            var endTime = AsLocalTime(reservation.EndTime).ToString("t");
 
             string subject;
             string heading;
@@ -366,6 +366,15 @@ namespace GIBS.Module.Resource.Services
 
             _notificationRepository.AddNotification(notification);
             _logger.Log(LogLevel.Information, this, LogFunction.Other, "Reservation email queued for reservation {ReservationId} to user {UserId}", reservation.ReservationId, reservation.UserId);
+        }
+
+        private static DateTime AsLocalTime(DateTime value)
+        {
+            var utcValue = value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+                : value.ToUniversalTime();
+
+            return utcValue.ToLocalTime();
         }
     }
 }

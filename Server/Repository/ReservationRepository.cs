@@ -43,6 +43,7 @@ namespace GIBS.Module.Resource.Repository
         public Models.Reservation AddReservation(Models.Reservation reservation)
         {
             using var db = _factory.CreateDbContext();
+            NormalizeReservationDateTimes(reservation);
             db.Reservation.Add(reservation);
             db.SaveChanges();
             return reservation;
@@ -59,8 +60,8 @@ namespace GIBS.Module.Resource.Repository
 
             current.ResourceId = reservation.ResourceId;
             current.UserId = reservation.UserId;
-            current.StartTime = reservation.StartTime;
-            current.EndTime = reservation.EndTime;
+            current.StartTime = AsUtcKind(reservation.StartTime);
+            current.EndTime = AsUtcKind(reservation.EndTime);
             current.Status = reservation.Status;
             current.Notes = reservation.Notes;
             current.OptIn = reservation.OptIn;
@@ -89,6 +90,32 @@ namespace GIBS.Module.Resource.Repository
                 item.Status != Models.ReservationStatus.Cancelled &&
                 item.StartTime.AddMinutes(-bufferBeforeMinutes) < endTime &&
                 item.EndTime.AddMinutes(bufferAfterMinutes) > startTime);
+        }
+
+        private static void NormalizeReservationDateTimes(Models.Reservation reservation)
+        {
+            reservation.StartTime = AsUtcKind(reservation.StartTime);
+            reservation.EndTime = AsUtcKind(reservation.EndTime);
+
+            if (reservation.CreatedOn != default)
+            {
+                reservation.CreatedOn = AsUtcKind(reservation.CreatedOn);
+            }
+
+            if (reservation.ModifiedOn != default)
+            {
+                reservation.ModifiedOn = AsUtcKind(reservation.ModifiedOn);
+            }
+        }
+
+        private static DateTime AsUtcKind(DateTime value)
+        {
+            return value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            };
         }
     }
 }
